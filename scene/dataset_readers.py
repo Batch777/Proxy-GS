@@ -28,6 +28,7 @@ try:
 except:
     print("No laspy")
 from scene.gaussian_model import BasicPointCloud
+from utils.tar_image import open_image, image_available
 import cv2
 
 
@@ -122,7 +123,7 @@ def readColmapCameras(cam_extrinsics, cam_intrinsics, images_folder,test_cam_nam
         # if int(image_path.split('/')[-1].split('_')[-1].split('.')[0])%2==0:
         #     continue
 
-        image = Image.open(image_path)
+        image = open_image(image_path)
 
         # print(f'image: {image.size}')
 
@@ -216,7 +217,7 @@ def storePly(path, xyz, rgb):
     ply_data = PlyData([vertex_element])
     ply_data.write(path)
 
-def readCamerasFromTransforms(path, transformsfile, random_background, white_background, extension=".png", undistorted=False, is_debug=False):
+def readCamerasFromTransforms(path, transformsfile, random_background, white_background, extension=".png", undistorted=False, is_debug=False, load_images=True):
     cam_infos = []
     if undistorted:
         print("Undistortion the images!!!")
@@ -245,7 +246,7 @@ def readCamerasFromTransforms(path, transformsfile, random_background, white_bac
             # if idx > 10 :
             #     continue
             cam_name = os.path.join(path, frame["file_path"] + extension)
-            if not os.path.exists(cam_name):
+            if not image_available(cam_name):
                 print(f"File {cam_name} does not exist, skipping...")
                 continue
             # NeRF 'transform_matrix' is a camera-to-world transform
@@ -267,34 +268,44 @@ def readCamerasFromTransforms(path, transformsfile, random_background, white_bac
             R = np.transpose(w2c[:3,:3])  # R is stored transposed due to 'glm' in CUDA code
             T = w2c[:3, 3]
 
-            image_path = os.path.join(path, cam_name)
+            image_path = cam_name  # cam_name 已经是 join(path, file_path) 的完整路径，避免二次拼接
             image_name = Path(cam_name).stem
-            image = Image.open(image_path)
+            if load_images:
+                image = open_image(image_path)
 
-            if undistorted:
-                mtx = np.array(
-                    [
-                        [frame["fl_x"], 0, frame["cx"]],
-                        [0, frame["fl_y"], frame["cy"]],
-                        [0, 0, 1.0],
-                    ],
-                    dtype=np.float32,
-                )
-                dist = np.array([frame["k1"], frame["k2"], frame["p1"], frame["p2"], frame["k3"]], dtype=np.float32)
-                im_data = np.array(image.convert("RGB"))
-                arr = cv2.undistort(im_data / 255.0, mtx, dist, None, mtx)
-                image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
-            else:
-                im_data = np.array(image.convert("RGBA"))
-                if random_background:
-                    bg = [np.random.random(),np.random.random(),np.random.random()] 
-                elif white_background:
-                    bg = [1.0, 1.0, 1.0]
+                if undistorted:
+                    mtx = np.array(
+                        [
+                            [frame["fl_x"], 0, frame["cx"]],
+                            [0, frame["fl_y"], frame["cy"]],
+                            [0, 0, 1.0],
+                        ],
+                        dtype=np.float32,
+                    )
+                    dist = np.array([frame["k1"], frame["k2"], frame["p1"], frame["p2"], frame["k3"]], dtype=np.float32)
+                    im_data = np.array(image.convert("RGB"))
+                    arr = cv2.undistort(im_data / 255.0, mtx, dist, None, mtx)
+                    image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
                 else:
-                    bg = [0.0, 0.0, 0.0]
-                norm_data = im_data / 255.0
-                arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
-                image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+                    im_data = np.array(image.convert("RGBA"))
+                    if random_background:
+                        bg = [np.random.random(),np.random.random(),np.random.random()]
+                    elif white_background:
+                        bg = [1.0, 1.0, 1.0]
+                    else:
+                        bg = [0.0, 0.0, 0.0]
+                    norm_data = im_data / 255.0
+                    arr = norm_data[:,:,:3] * norm_data[:, :, 3:4] + bg * (1 - norm_data[:, :, 3:4])
+                    image = Image.fromarray(np.array(arr*255.0, dtype=np.byte), "RGB")
+            else:
+                # 不加载像素（如 mesh_render 只需要相机参数）：用真实尺寸的占位图，
+                # 宽高取自 transforms JSON 顶层 w/h，缺失时回退到读第一张真实图片的尺寸。
+                pw, ph = contents.get("w"), contents.get("h")
+                if pw is None or ph is None:
+                    probe = open_image(image_path)
+                    pw, ph = probe.size
+                    contents["w"], contents["h"] = pw, ph
+                image = Image.new("RGB", (int(pw), int(ph)))
 
             if fovx is not None:
                 fovy = focal2fov(fov2focal(fovx, image.size[0]), image.size[1])
@@ -371,11 +382,27 @@ def readColmapSceneInfo(path, images, eval, ds, llffhold=50):
                            ply_path=ply_path)
     return scene_info
 
-def readNerfSyntheticInfo(path, random_background, white_background, eval, extension=".png", ply_path=None):
+def readNerfSyntheticInfo(path, random_background, white_background, eval, extension=".png", ply_path=None, load_images=True):
     print("Reading Training Transforms")
-    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", random_background, white_background, extension)
+    train_cam_infos = readCamerasFromTransforms(path, "transforms_train.json", random_background, white_background, extension, load_images=load_images)
     print("Reading Test Transforms")
-    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", random_background, white_background, extension)
+    test_cam_infos = readCamerasFromTransforms(path, "transforms_test.json", random_background, white_background, extension, load_images=load_images)
+
+    # MatrixCity pose_block 的 test 划分与 train 引用不同目录但同名（0000.png...）的图片，
+    # image_name 只用 basename 会导致深度图等按键查找时互相覆盖，这里给冲突的测试相机名加父目录前缀。
+    seen_names = {c.image_name for c in train_cam_infos}
+    fixed_test = []
+    for c in test_cam_infos:
+        if c.image_name in seen_names:
+            new_name = f"{Path(c.image_path).parent.name}__{c.image_name}"
+            while new_name in seen_names:
+                new_name += "_t"
+            seen_names.add(new_name)
+            fixed_test.append(c._replace(image_name=new_name))
+        else:
+            seen_names.add(c.image_name)
+            fixed_test.append(c)
+    test_cam_infos = fixed_test
     
     if not eval:
         train_cam_infos.extend(test_cam_infos)
@@ -383,8 +410,10 @@ def readNerfSyntheticInfo(path, random_background, white_background, eval, exten
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
     if ply_path is None:
-        ply_path = glob.glob(os.path.join(path, "*.ply"))[0]
-    if not os.path.exists(ply_path):
+        # ply_path = glob.glob(os.path.join(path, "*.ply"))[0]
+        ply_path = glob.glob(os.path.join(path, "*.ply"))
+        
+    if len(ply_path) == 0 or not os.path.exists(ply_path[0]):
         # Since this data set has no colmap data, we start with random points
         num_pts = 10_000
         print(f"Generating random point cloud ({num_pts})...")
@@ -394,7 +423,7 @@ def readNerfSyntheticInfo(path, random_background, white_background, eval, exten
         normals=np.zeros((num_pts, 3))
         pcd = BasicPointCloud(points=xyz, colors=colors, normals=normals)
 
-        storePly(ply_path, xyz, colors*255)
+        storePly(ply_path[0], xyz, colors*255)
     else:
         pcd = fetchPly(ply_path)
 

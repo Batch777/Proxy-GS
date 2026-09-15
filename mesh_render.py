@@ -110,7 +110,7 @@ def mesh_render(dataset, opt, pipe, dataset_name, testing_iterations, saving_ite
         dataset.add_opacity_dist, dataset.add_cov_dist, dataset.add_color_dist, dataset.add_level, 
         dataset.visible_threshold, dataset.dist2level, dataset.base_layer, dataset.progressive, dataset.extend
     )
-    scene = Scene(dataset, gaussians, ply_path=ply_path, shuffle=False, logger=logger, resolution_scales=dataset.resolution_scales, mesh_path= mesh_path)
+    scene = Scene(dataset, gaussians, ply_path=ply_path, shuffle=False, logger=logger, resolution_scales=dataset.resolution_scales, mesh_path= mesh_path, load_images=False)
 
     # 初始化 DepthRenderer，避免每次迭代都重新创建
     device = "cuda"
@@ -127,11 +127,12 @@ def mesh_render(dataset, opt, pipe, dataset_name, testing_iterations, saving_ite
     for viewpoint_cam in viewpoint_stack:        
         # network gui not available in octree-gs yet        
         # Pick a random Camera
-        
+        depth_save_path = os.path.join(depth_npy_dir, f"{viewpoint_cam.image_name}.npy")
+        if os.path.exists(depth_save_path):
+            continue  # 断点续跑：已生成的深度图直接跳过
 
         depth_m =  mesh_depth_render(viewpoint_cam, renderer = depth_renderer, mesh=mesh)
         depth_np = depth_m.detach().cpu().numpy() if torch.is_tensor(depth_m) else np.asarray(depth_m)
-        depth_save_path = os.path.join(depth_npy_dir, f"{viewpoint_cam.image_name}.npy")
         np.save(depth_save_path, depth_np)
 
 

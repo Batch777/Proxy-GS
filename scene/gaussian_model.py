@@ -14,7 +14,19 @@ from datetime import timedelta
 import torch
 from functools import reduce
 import numpy as np
-from torch_scatter import scatter_max
+try:
+    from torch_scatter import scatter_max
+except (ImportError, OSError):
+    # torch_scatter 未提供 torch 2.14 的预编译 wheel，这里用 torch 原生
+    # scatter_reduce 实现本项目唯一用到的 dim=0 分组取最大值。
+    def scatter_max(src, index, dim=0, dim_size=None):
+        assert dim == 0, "fallback scatter_max only supports dim=0"
+        if dim_size is None:
+            dim_size = int(index.max().item()) + 1 if index.numel() > 0 else 0
+        out = torch.full((dim_size, src.size(1)), float("-inf"),
+                         device=src.device, dtype=src.dtype)
+        out.scatter_reduce_(0, index, src, reduce="amax", include_self=True)
+        return out, None
 from utils.general_utils import inverse_sigmoid, get_expon_lr_func
 from torch import nn
 import os
