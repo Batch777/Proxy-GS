@@ -161,7 +161,7 @@ def training(dataset, opt, pipe, dataset_name, testing_iterations, saving_iterat
     gaussians.training_setup(opt)
     gaussians.set_coarse_interval(opt.coarse_iter, opt.coarse_factor)
     if checkpoint:
-        (model_params, first_iter) = torch.load(checkpoint)
+        (model_params, first_iter) = torch.load(checkpoint, weights_only=False)
         gaussians.restore(model_params, opt)
 
     iter_start = torch.cuda.Event(enable_timing = True)

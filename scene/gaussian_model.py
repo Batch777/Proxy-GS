@@ -198,30 +198,55 @@ class GaussianModel:
         return (
             self._anchor,
             self._level,
+            self._extra_level,
             self._offset,
-            self._local,
+            self._anchor_feat,
             self._scaling,
             self._rotation,
             self._opacity,
-            self.denom,
+            self.opacity_accum,
+            self.offset_gradient_accum,
+            self.offset_denom,
+            self.anchor_demon,
+            self.voxel_size,
+            self.standard_dist,
+            self.mlp_opacity.state_dict(),
+            self.mlp_cov.state_dict(),
+            self.mlp_color.state_dict(),
             self.optimizer.state_dict(),
             self.spatial_lr_scale,
         )
-    
+
     def restore(self, model_args, training_args):
-        (self.active_sh_degree, 
-        self._anchor, 
+        (self._anchor,
         self._level,
+        self._extra_level,
         self._offset,
-        self._local,
-        self._scaling, 
-        self._rotation, 
+        self._anchor_feat,
+        self._scaling,
+        self._rotation,
         self._opacity,
-        denom,
-        opt_dict, 
+        opacity_accum,
+        offset_gradient_accum,
+        offset_denom,
+        anchor_demon,
+        self.voxel_size,
+        self.standard_dist,
+        mlp_opacity_dict,
+        mlp_cov_dict,
+        mlp_color_dict,
+        opt_dict,
         self.spatial_lr_scale) = model_args
+        self.mlp_opacity.load_state_dict(mlp_opacity_dict)
+        self.mlp_cov.load_state_dict(mlp_cov_dict)
+        self.mlp_color.load_state_dict(mlp_color_dict)
+        # training_setup rebuilds the optimizer over the restored params and
+        # zeroes the accumulators, so restore those afterwards.
         self.training_setup(training_args)
-        self.denom = denom
+        self.opacity_accum = opacity_accum
+        self.offset_gradient_accum = offset_gradient_accum
+        self.offset_denom = offset_denom
+        self.anchor_demon = anchor_demon
         self.optimizer.load_state_dict(opt_dict)
 
     @property
@@ -792,10 +817,17 @@ class GaussianModel:
             if ~self.progressive or iteration > self.coarse_intervals[-1]:
                 self._extra_level += extra_up * candidate_extra_mask.float()    
 
-            all_xyz = self.get_anchor.unsqueeze(dim=1) + self._offset * self.get_scaling[:,:3].unsqueeze(dim=1)
+            # Direct candidate indexing over (anchor, offset) pairs. The old
+            # code materialized all_xyz (N_anchors*10*3 floats) and below an
+            # N*10*32 repeated feature tensor; together they exceed 12 GiB
+            # once anchors approach 10M and crash WSL2 with "CUDA error:
+            # unknown error".
+            cand_flat = candidate_mask.nonzero(as_tuple=False).squeeze(1)
+            cand_anchor = cand_flat // self.n_offsets
+            cand_offset = cand_flat % self.n_offsets
 
             grid_coords = torch.round((self.get_anchor[level_mask]-self.init_pos)/cur_size).int()
-            selected_xyz = all_xyz.view([-1, 3])[candidate_mask]
+            selected_xyz = self.get_anchor[cand_anchor] + self._offset[cand_anchor, cand_offset] * self.get_scaling[cand_anchor, :3]
             selected_grid_coords = torch.round((selected_xyz-self.init_pos)/cur_size).int()
             selected_grid_coords_unique, inverse_indices = torch.unique(selected_grid_coords, return_inverse=True, dim=0)
             if selected_grid_coords_unique.shape[0] > 0 and grid_coords.shape[0] > 0:
@@ -813,7 +845,10 @@ class GaussianModel:
 
             if (~self.progressive or iteration > self.coarse_intervals[-1]) and cur_level < self.levels - 1:
                 grid_coords_ds = torch.round((self.get_anchor[level_ds_mask]-self.init_pos)/ds_size).int()
-                selected_xyz_ds = all_xyz.view([-1, 3])[candidate_ds_mask]
+                cand_flat_ds = candidate_ds_mask.nonzero(as_tuple=False).squeeze(1)
+                cand_anchor_ds_idx = cand_flat_ds // self.n_offsets
+                cand_offset_ds = cand_flat_ds % self.n_offsets
+                selected_xyz_ds = self.get_anchor[cand_anchor_ds_idx] + self._offset[cand_anchor_ds_idx, cand_offset_ds] * self.get_scaling[cand_anchor_ds_idx, :3]
                 selected_grid_coords_ds = torch.round((selected_xyz_ds-self.init_pos)/ds_size).int()
                 selected_grid_coords_unique_ds, inverse_indices_ds = torch.unique(selected_grid_coords_ds, return_inverse=True, dim=0)
                 if selected_grid_coords_unique_ds.shape[0] > 0 and grid_coords_ds.shape[0] > 0:
@@ -838,7 +873,7 @@ class GaussianModel:
                 new_anchor = torch.cat([candidate_anchor, candidate_anchor_ds], dim=0)
                 new_level = torch.cat([new_level, new_level_ds]).unsqueeze(dim=1).float().cuda()
                 
-                new_feat = self._anchor_feat.unsqueeze(dim=1).repeat([1, self.n_offsets, 1]).view([-1, self.feat_dim])[candidate_mask]
+                new_feat = self._anchor_feat[cand_anchor]
                 new_feat = scatter_max(new_feat, inverse_indices.unsqueeze(1).expand(-1, new_feat.size(1)), dim=0)[0][remove_duplicates]
                 new_feat_ds = torch.zeros([candidate_anchor_ds.shape[0], self.feat_dim], dtype=torch.float, device='cuda')
                 new_feat = torch.cat([new_feat, new_feat_ds], dim=0)  #以0作为初始化在后期容易被prune
@@ -1200,6 +1235,7 @@ class GaussianModel:
     
     def adjust_anchor(self, iteration, check_interval=100, success_threshold=0.8, grad_threshold=0.0002, update_ratio=0.5, extra_ratio=4.0, extra_up=0.25, min_opacity=0.005):
         # # adding anchors
+        _n_before = self.get_anchor.shape[0]
         grads = self.offset_gradient_accum / self.offset_denom # [N*k, 1]
         grads[grads.isnan()] = 0.0
         grads_norm = torch.norm(grads, dim=-1)
@@ -1251,6 +1287,10 @@ class GaussianModel:
 
         if prune_mask.shape[0]>0:
             self.prune_anchor(prune_mask)
+
+        torch.cuda.synchronize()
+        print(f"[adjust_anchor] iter {iteration}: anchors {_n_before} -> {self.get_anchor.shape[0]}, "
+              f"gpu_mem={torch.cuda.memory_allocated()/2**30:.2f}GiB peak={torch.cuda.max_memory_allocated()/2**30:.2f}GiB")
 
     def save_mlp_checkpoints(self, path, mode = 'split'):#split or unite
         mkdir_p(os.path.dirname(path))
