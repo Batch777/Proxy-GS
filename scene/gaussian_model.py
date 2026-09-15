@@ -563,9 +563,11 @@ class GaussianModel:
 
         dtype_full = [(attribute, 'f4') for attribute in self.construct_list_of_attributes()]
 
-        elements = np.empty(anchor.shape[0], dtype=dtype_full)
-        attributes = np.concatenate((anchor, levels, extra_levels, infos, offsets, anchor_feats, opacities, scales, rots), axis=1)
-        elements[:] = list(map(tuple, attributes))
+        attributes = np.concatenate((anchor, levels, extra_levels, infos, offsets, anchor_feats, opacities, scales, rots), axis=1).astype(np.float32)
+        # Fast path: view the contiguous float32 block as the structured dtype
+        # directly. list(map(tuple, attributes)) builds 8M+ Python tuples and
+        # takes minutes / several GiB of host RAM at this anchor count.
+        elements = np.ascontiguousarray(attributes).ravel().view(dtype_full)
         el = PlyElement.describe(elements, 'vertex')
         PlyData([el]).write(path)
 

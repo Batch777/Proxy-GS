@@ -410,9 +410,13 @@ def readNerfSyntheticInfo(path, random_background, white_background, eval, exten
 
     nerf_normalization = getNerfppNorm(train_cam_infos)
     if ply_path is None:
-        # ply_path = glob.glob(os.path.join(path, "*.ply"))[0]
         ply_path = glob.glob(os.path.join(path, "*.ply"))
-        
+    # Normalize: callers may pass a single path string; indexing a string
+    # (ply_path[0]) would silently yield its first character ("d") and made
+    # storePly write a stray file named "d".
+    if isinstance(ply_path, str):
+        ply_path = [ply_path]
+
     if len(ply_path) == 0 or not os.path.exists(ply_path[0]):
         # Since this data set has no colmap data, we start with random points
         num_pts = 10_000
@@ -423,9 +427,10 @@ def readNerfSyntheticInfo(path, random_background, white_background, eval, exten
         normals=np.zeros((num_pts, 3))
         pcd = BasicPointCloud(points=xyz, colors=colors, normals=normals)
 
-        storePly(ply_path[0], xyz, colors*255)
+        if len(ply_path) > 0:
+            storePly(ply_path[0], xyz, colors*255)
     else:
-        pcd = fetchPly(ply_path)
+        pcd = fetchPly(ply_path[0])
 
     scene_info = SceneInfo(point_cloud=pcd,
                            train_cameras=train_cam_infos,
