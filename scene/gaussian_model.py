@@ -742,16 +742,19 @@ class GaussianModel:
         self._extra_level = self._extra_level[valid_points_mask]
     
     def get_remove_duplicates(self, grid_coords, selected_grid_coords_unique, use_chunk = True):
-        if use_chunk:
-            chunk_size = 4096
-            max_iters = grid_coords.shape[0] // chunk_size + (1 if grid_coords.shape[0] % chunk_size != 0 else 0)
-            remove_duplicates_list = []
-            for i in range(max_iters):
-                cur_remove_duplicates = (selected_grid_coords_unique.unsqueeze(1) == grid_coords[i*chunk_size:(i+1)*chunk_size, :]).all(-1).any(-1).view(-1)
-                remove_duplicates_list.append(cur_remove_duplicates)
-            remove_duplicates = reduce(torch.logical_or, remove_duplicates_list)
-        else:
-            remove_duplicates = (selected_grid_coords_unique.unsqueeze(1) == grid_coords).all(-1).any(-1).view(-1)
+        # Sort-based exact dedup: the old broadcast-compare chunked path
+        # materializes (N_unique, 4096, 3) bool per chunk, which blows past
+        # 24 GiB VRAM when N_unique > ~1M (observed 15 GiB at 1M) and crashes
+        # with "CUDA error: unknown error" under WSL2. This version is
+        # O((N+M) log) time and ~0.5 GiB at 8M+2M rows.
+        n_grid = grid_coords.shape[0]
+        if n_grid == 0 or selected_grid_coords_unique.shape[0] == 0:
+            return torch.zeros(selected_grid_coords_unique.shape[0], dtype=torch.bool, device=grid_coords.device)
+        all_coords = torch.cat([grid_coords, selected_grid_coords_unique], dim=0)
+        uniq, inverse = torch.unique(all_coords, return_inverse=True, dim=0)
+        present = torch.zeros(uniq.shape[0], dtype=torch.bool, device=grid_coords.device)
+        present[inverse[:n_grid]] = True
+        remove_duplicates = present[inverse[n_grid:]]
         return remove_duplicates
     
     def anchor_growing(self, iteration, grads, threshold, update_ratio, extra_ratio, extra_up, offset_mask):
