@@ -264,13 +264,17 @@ RasterizeGaussiansfilterCUDA(
   {
 	  int M = 0;
 
+	  torch::Tensor depth_contig = depth_mesh.contiguous();
+	  const size_t depthPitchBytes = (size_t)depth_contig.stride(0) * sizeof(float);
+
 	  CudaRasterizer::Rasterizer::visible_filter(
 			geomFunc,
 			binningFunc,
 			imgFunc,
 			P, M,
 			W, H,
-			depth_mesh.contiguous().data<float>(),
+			depth_contig.data<float>(),
+			depthPitchBytes,
 			means3D.contiguous().data<float>(),
 			scales.contiguous().data_ptr<float>(),
 			scale_modifier,

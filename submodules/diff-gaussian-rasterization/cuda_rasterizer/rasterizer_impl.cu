@@ -59,7 +59,12 @@ CudaRasterizer::Rasterizer::makeDepthTextureFromLinear(
     tex.normalizedCoords = 0;
 
     cudaTextureObject_t t = 0;
-    cudaCreateTextureObject(&t, &res, &tex, nullptr);
+    cudaError_t err = cudaCreateTextureObject(&t, &res, &tex, nullptr);
+    if (err != cudaSuccess) {
+        printf("[FATAL] cudaCreateTextureObject failed: %s (W=%d H=%d pitchInBytes=%zu)\n",
+               cudaGetErrorString(err), W, H, pitchBytes);
+        return 0;
+    }
     return t;
 }
 
@@ -424,6 +429,7 @@ void CudaRasterizer::Rasterizer::visible_filter(
 	const int P, int M,
 	const int width, int height,
 	const float* depth_mesh,
+	const size_t depth_pitch_bytes,
 	const float* means3D,
 	const float* scales,
 	const float scale_modifier,
@@ -463,7 +469,7 @@ void CudaRasterizer::Rasterizer::visible_filter(
 	char* img_chunkptr = imageBuffer(img_chunk_size);
 	ImageState imgState = ImageState::fromChunk(img_chunkptr, width * height);
 
-    const size_t pitchBytes = (size_t)width * sizeof(float);
+    const size_t pitchBytes = depth_pitch_bytes;
 
     // ★ 只在发生变化时重建纹理对象
     cudaTextureObject_t depthTex = getOrCreateDepthTex(depth_mesh, width, height, pitchBytes);

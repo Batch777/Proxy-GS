@@ -180,8 +180,14 @@ class GaussianRasterizer(nn.Module):
         super().__init__()
         self.raster_settings = raster_settings
         global _depth_buf
-        if _depth_buf == None:
-            _depth_buf = torch.empty(raster_settings.image_height, raster_settings.image_width, device='cuda', dtype=torch.float32)
+        H, W = raster_settings.image_height, raster_settings.image_width
+        # cudaCreateTextureObject (cudaResourceTypePitch2D) requires the row
+        # pitch in bytes to satisfy the device texture-pitch alignment
+        # (256B on modern GPUs), so allocate the depth buffer with a padded
+        # row width (64 floats = 256 bytes).
+        W_pad = ((W + 63) // 64) * 64
+        if _depth_buf is None or _depth_buf.shape[0] != H or _depth_buf.shape[1] != W_pad:
+            _depth_buf = torch.empty(H, W_pad, device='cuda', dtype=torch.float32)
 
     def markVisible(self, positions):
         # Mark visible points (based on frustum culling for camera) with a boolean 
@@ -243,7 +249,8 @@ class GaussianRasterizer(nn.Module):
             point_mask = torch.Tensor([])   
         depth = self._ensure_depth(raster_settings.depth_mesh, raster_settings.image_height, raster_settings.image_width, 'cuda')
         global _depth_buf
-        _depth_buf.copy_(depth)
+        W = raster_settings.image_width
+        _depth_buf[:, :W].copy_(depth)
         # Invoke C++/CUDA rasterization routine
         with torch.no_grad():
             radii = _C.rasterize_aussians_filter(means3D,

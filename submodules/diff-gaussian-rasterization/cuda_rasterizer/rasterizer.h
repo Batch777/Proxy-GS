@@ -75,6 +75,7 @@ namespace CudaRasterizer
 			const int P, int M,
 			const int width, int height,
 			const float* depth_mesh,
+			const size_t depth_pitch_bytes,
 			const float* means3D,
 			const float* scales,
 			const float scale_modifier,
