@@ -194,60 +194,44 @@ class GaussianModel:
         if self.appearance_dim > 0:
             self.embedding_appearance.train()
 
-    def capture(self):
-        return (
-            self._anchor,
-            self._level,
-            self._extra_level,
-            self._offset,
-            self._anchor_feat,
-            self._scaling,
-            self._rotation,
-            self._opacity,
-            self.opacity_accum,
-            self.offset_gradient_accum,
-            self.offset_denom,
-            self.anchor_demon,
-            self.voxel_size,
-            self.standard_dist,
-            self.mlp_opacity.state_dict(),
-            self.mlp_cov.state_dict(),
-            self.mlp_color.state_dict(),
-            self.optimizer.state_dict(),
-            self.spatial_lr_scale,
-        )
+    # Checkpoint field registry: pack/unpack iterate these name lists instead
+    # of a long positional tuple, so fields are self-describing and new ones
+    # can be added without breaking the (un)packing order.
+    _CKPT_PARAM_NAMES = ("_anchor", "_level", "_extra_level", "_offset",
+                         "_anchor_feat", "_scaling", "_rotation", "_opacity")
+    _CKPT_ACCUM_NAMES = ("opacity_accum", "offset_gradient_accum",
+                         "offset_denom", "anchor_demon")
+    _CKPT_MLP_NAMES = ("mlp_opacity", "mlp_cov", "mlp_color")
+    _CKPT_META_NAMES = ("voxel_size", "standard_dist", "spatial_lr_scale")
 
-    def restore(self, model_args, training_args):
-        (self._anchor,
-        self._level,
-        self._extra_level,
-        self._offset,
-        self._anchor_feat,
-        self._scaling,
-        self._rotation,
-        self._opacity,
-        opacity_accum,
-        offset_gradient_accum,
-        offset_denom,
-        anchor_demon,
-        self.voxel_size,
-        self.standard_dist,
-        mlp_opacity_dict,
-        mlp_cov_dict,
-        mlp_color_dict,
-        opt_dict,
-        self.spatial_lr_scale) = model_args
-        self.mlp_opacity.load_state_dict(mlp_opacity_dict)
-        self.mlp_cov.load_state_dict(mlp_cov_dict)
-        self.mlp_color.load_state_dict(mlp_color_dict)
+    def capture(self):
+        mlps = {name: getattr(self, name).state_dict() for name in self._CKPT_MLP_NAMES}
+        if self.use_feat_bank:
+            mlps["mlp_feature_bank"] = self.mlp_feature_bank.state_dict()
+        if self.appearance_dim > 0:
+            mlps["embedding_appearance"] = self.embedding_appearance.state_dict()
+        return {
+            "params": {name: getattr(self, name) for name in self._CKPT_PARAM_NAMES},
+            "accumulators": {name: getattr(self, name) for name in self._CKPT_ACCUM_NAMES},
+            "mlps": mlps,
+            "meta": {name: getattr(self, name) for name in self._CKPT_META_NAMES},
+            "optimizer": self.optimizer.state_dict(),
+        }
+
+    def restore(self, state, training_args):
+        for name, tensor in state["params"].items():
+            setattr(self, name, tensor)
+        for name, mlp_state in state["mlps"].items():
+            if hasattr(self, name) and getattr(self, name) is not None:
+                getattr(self, name).load_state_dict(mlp_state)
+        for name, value in state["meta"].items():
+            setattr(self, name, value)
         # training_setup rebuilds the optimizer over the restored params and
         # zeroes the accumulators, so restore those afterwards.
         self.training_setup(training_args)
-        self.opacity_accum = opacity_accum
-        self.offset_gradient_accum = offset_gradient_accum
-        self.offset_denom = offset_denom
-        self.anchor_demon = anchor_demon
-        self.optimizer.load_state_dict(opt_dict)
+        for name, tensor in state["accumulators"].items():
+            setattr(self, name, tensor)
+        self.optimizer.load_state_dict(state["optimizer"])
 
     @property
     def get_appearance(self):
