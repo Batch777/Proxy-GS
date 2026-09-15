@@ -485,7 +485,9 @@ def prefilter_voxel(viewpoint_camera, pc : GaussianModel, pipe, bg_color : torch
         cov3D_precomp = cov3D_precomp,
         point_mask = pc._anchor_mask)
     
-    visible_mask = (radii_pure > 0)#&pc._anchor_mask        
+    visible_mask = (radii_pure > 0)
+    # &pc._anchor_mask        
+    
     # end = time.time()
     # print("Prefiltering time: ", end - start)
 
