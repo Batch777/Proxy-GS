@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Proxy-GS · SparkJS Viewer (decoded 100k)</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0e14; }
+  #app { position: fixed; inset: 0; }
+  .hud {
+    position: fixed; z-index: 10; color: #dbe2f0;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: rgba(10, 14, 22, .72); border: 1px solid rgba(120,150,200,.25);
+    border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px);
+  }
+  #stats { top: 12px; left: 12px; min-width: 210px; }
+  #bench { top: 12px; right: 12px; min-width: 280px; }
+  .hud h3 { margin: 0 0 6px; font-size: 12px; color: #8fb8ff; letter-spacing: .06em; text-transform: uppercase; }
+  .hud table { border-collapse: collapse; width: 100%; }
+  .hud td { padding: 1px 4px; white-space: nowrap; }
+  .hud td:last-child { text-align: right; color: #a8f0c6; }
+  .hud .dim { color: #7c8698; }
+  #fps { font-size: 22px; color: #a8f0c6; font-weight: 700; }
+  #bar { height: 6px; background: #1d2635; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+  #bar > div { height: 100%; width: 0%; background: linear-gradient(90deg,#3b82f6,#22d3ee); transition: width .2s; }
+  #help { bottom: 12px; left: 12px; color: #93a0b8; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./node_modules/three/build/three.module.js",
+    "three/addons/": "./node_modules/three/examples/jsm/",
+    "@sparkjsdev/spark": "./node_modules/@sparkjsdev/spark/dist/spark.module.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="hud" id="stats">
+  <h3>SparkJS · 实时渲染</h3>
+  <div><span id="fps">–</span> <span class="dim">FPS (avg <span id="fpsAvg">–</span>)</span></div>
+  <div class="dim" id="meta">loading…</div>
+  <div id="bar"><div></div></div>
+</div>
+
+<div class="hud" id="bench">
+  <h3>对比：Python 管线 @250×250 (RTX 4090D)</h3>
+  <table>
+    <tr><td>prefilter</td><td class="dim">2.31 ms</td></tr>
+    <tr><td>decode (MLP)</td><td class="dim">33.54 ms</td></tr>
+    <tr><td>光栅化</td><td class="dim">31.15 ms</td></tr>
+    <tr><td>直接 render (每帧 decode)</td><td>14.9 FPS</td></tr>
+    <tr><td>decode 摊销 K=5</td><td>24.9 FPS</td></tr>
+    <tr><td>decode 摊销 K=20</td><td>28.5 FPS</td></tr>
+    <tr><td>decode 摊销 K=100</td><td>29.6 FPS</td></tr>
+    <tr><td>本页 SparkJS (预解码)</td><td id="fpsCell" style="color:#ffd479">–</td></tr>
+  </table>
+  <div class="dim" style="margin-top:6px">分辨率不同，仅作量级参考</div>
+</div>
+
+<div class="hud" id="help">左键旋转 · 右键平移 · 滚轮缩放 · R 复位视角</div>
+
+<script type="module">
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { SplatMesh, SparkRenderer } from "@sparkjsdev/spark";
+
+const CENTER = new THREE.Vector3(0.39, 4.95, 0.23);
+const RADIUS = 26.96;
+// 数据集为 Z-up；默认视角 = transforms_test.json 相机0（街角）
+const HOME_POS = new THREE.Vector3(-3.742, 5.163, 0.03);
+const HOME_TGT = new THREE.Vector3(2.109, -0.292, 0.03);
+
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.getElementById("app").appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0e14);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 2000);
+camera.up.set(0, 0, 1);   // Z-up world
+function resetView() {
+  camera.position.copy(HOME_POS);
+  controls.target.copy(HOME_TGT);
+  controls.update();
+}
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+
+const spark = new SparkRenderer({ renderer });
+scene.add(spark);
+
+const metaEl = document.getElementById("meta");
+const barEl = document.querySelector("#bar > div");
+
+const splat = new SplatMesh({
+  url: "./public/decoded_100k.ply",
+  onProgress: (e) => {
+    if (e.total) {
+      const pct = (e.loaded / e.total * 100);
+      barEl.style.width = pct.toFixed(1) + "%";
+      metaEl.textContent = `loading ${(e.loaded / 1e6).toFixed(0)} / ${(e.total / 1e6).toFixed(0)} MB`;
+    } else {
+      metaEl.textContent = `loading ${(e.loaded / 1e6).toFixed(0)} MB`;
+    }
+  },
+  onLoad: (mesh) => {
+    const n = mesh.packedSplats?.numSplats ?? mesh.numSplats ?? "?";
+    metaEl.textContent = `${Number(n).toLocaleString()} splats · 519 MiB PLY (预解码 3DGS)`;
+    barEl.style.width = "100%";
+  },
+});
+scene.add(splat);
+
+resetView();
+window.__viewer = { camera, controls, CENTER, RADIUS, resetView, splat, spark };
+addEventListener("keydown", (e) => { if (e.key === "r" || e.key === "R") resetView(); });
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// FPS: instantaneous + 2s rolling average
+let frames = 0, tPrev = performance.now(), fpsAvg = 0;
+const fpsEl = document.getElementById("fps");
+const fpsAvgEl = document.getElementById("fpsAvg");
+const fpsCell = document.getElementById("fpsCell");
+
+renderer.setAnimationLoop((t) => {
+  controls.update();
+  renderer.render(scene, camera);
+  frames++;
+  const now = performance.now();
+  const dt = now - tPrev;
+  if (dt >= 500) {
+    const fps = frames * 1000 / dt;
+    fpsAvg = fpsAvg ? fpsAvg * 0.6 + fps * 0.4 : fps;
+    fpsEl.textContent = fps.toFixed(0);
+    fpsAvgEl.textContent = fpsAvg.toFixed(1);
+    fpsCell.textContent = fpsAvg.toFixed(1) + " FPS";
+    frames = 0; tPrev = now;
+  }
+});
+</script>
+</body>
+</html>
