@@ -1,8 +1,8 @@
 # Verify NvdiffrastMeshDepthRenderer (VK2TorchRenderer drop-in) against the
 # precomputed mesh_depth_block_5 npy files, and measure per-frame latency.
 #
-#   python test_realtime_depth.py -s data/MatrixCity/small_city/street \
-#       --mesh mesh/tsdf_fusion_post_block5.ply --depth_dir mesh_depth_block_5
+#   python test/test_realtime_depth.py -s data/MatrixCity/small_city/street/pose_block/block_5 \
+#       --mesh mesh/block_5_reduce5.ply --depth_dir mesh_depth_block_5
 #
 # The npy files were produced by mesh_render.py's mesh_depth_render() with
 # flip_y=True / linear_depth=True at the dataset's -r 4 resolution (250x250),
@@ -17,7 +17,8 @@ import sys
 import numpy as np
 import torch
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))                    # test/ siblings
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
 
 from bench_decode_vs_render import load_cams, load_depth, timed
 from nvdiffrast_depth_renderer import NvdiffrastMeshDepthRenderer

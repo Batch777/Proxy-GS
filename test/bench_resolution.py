@@ -1,4 +1,7 @@
 import torch, os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))                    # test/ siblings
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
 from gaussian_renderer import GaussianModel, prefilter_voxel, render, generate_neural_gaussians
 from bench_decode_vs_render import load_cams, Pipe, timed
 from export_decoded_ply import load_cfg

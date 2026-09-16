@@ -1,4 +1,7 @@
 # Unit test: GaussianModel.capture/restore dict pack/unpack round-trip.
+import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
 import torch
 import torch.nn as nn
 from types import SimpleNamespace

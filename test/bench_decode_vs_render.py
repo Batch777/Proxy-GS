@@ -13,6 +13,9 @@ import argparse
 import numpy as np
 import torch
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
+
 from gaussian_renderer import GaussianModel, prefilter_voxel, render, generate_neural_gaussians
 from scene.cameras import MiniCam
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix

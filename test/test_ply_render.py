@@ -9,6 +9,10 @@ import numpy as np
 import torch
 import plyfile
 
+import sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))                    # test/ siblings
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # repo root
+
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from utils.graphics_utils import getWorld2View2, getProjectionMatrix
 from bench_decode_vs_render import load_cams

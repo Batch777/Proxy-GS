@@ -5,7 +5,19 @@
 
 ---
 
-## 2026-09-16 · P2+P3：实时 Decode Viewer（viewer_server.py + rtviewer/）
+## 2026-09-16 · 整理：test/benchmark 脚本迁入 test/
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 移动 | `bench_decode_vs_render.py`、`bench_resolution.py`、`test_ply_render.py`、`test_ckpt_roundtrip.py`、`repro_depth_pitch.py`、`test_realtime_depth.py` → `test/` | 测试与基准脚本统一归口（git mv，历史保留）；每个文件头部加 `sys.path` shim（repo root + test/ 同级），sibling import（`from bench_decode_vs_render import ...`）不变 | 本次 |
+| 修改 | `test/test_realtime_depth.py` | 头部用法注释更新为新路径与正确数据集目录 | 本次 |
+
+> 留在根目录的：`viewer_server.py`（应用入口）、`nvdiffrast_depth_renderer.py`（库）、
+> `export_decoded_ply.py` / `depth_viewer.py` / `plot_render_pipeline.py`（工具）。
+> 验证：6 个脚本 py_compile 全过；3 个 --help 级导入运行 OK；
+> `test/test_ckpt_roundtrip.py`（round-trip ALL OK）与 `test/repro_depth_pitch.py`（visible_filter OK）完整跑通。
+
+---
 
 | 类型 | 文件 | 说明 | Commit |
 |---|---|---|---|
