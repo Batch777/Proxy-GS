@@ -5,6 +5,23 @@
 
 ---
 
+## 2026-09-16 · 针状 artifact 四路对照实验（仅本地 main）
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 新增 | `test/compare_artifacts.py` | 在 test/0003 位姿渲染四路对照：A=官方（prefilter 无深度+render）；B=viewer 管线（reduce5 深度+prefilter+decode+rasterize）；C=viewer 管线但换全网格深度；D=无深度但 decode/rasterize 分离 | 本地 `1a3b290`（test/ 不上 fork） |
+
+> 结论：**四张图逐像素级一致**（A/B 顶部建筑边缘均有同样针状拖尾；C/D 同）。
+> 针状 artifact 是模型在该 test 位姿的固有表现，与 viewer 管线无关：
+> - 深度来源无关：reduce5 vs 全网格 mean\|d\|=0.0077m，画面一致
+> - decode/rasterize 分离无关：D 路不经过预解码缓存，画面一致
+> - 官方训练评测图（train 位姿 250²）干净 → 针状集中在训练视角分布之外的 test/极端位姿
+> - 游离飞行时的额外拖影 = K=8 decode 摊销冻结（视角相关 opacity/color 缓存滞后）+ 出分布视角叠加
+>
+> 输出：`selftest_frames/cmp_{A,B,C,D}_*.jpg`（未跟踪，不入库）
+
+---
+
 ## 2026-09-16 · viewer：train/test 数据集视角跳转
 
 | 类型 | 文件 | 说明 | Commit |
