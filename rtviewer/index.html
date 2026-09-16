@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proxy-GS · Realtime Decode Viewer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="hud">
+  <div class="row title">Proxy-GS <span class="dim">realtime decode</span></div>
+  <div class="row"><span>FPS</span><b id="hud-fps">–</b></div>
+  <div class="row"><span>帧耗时</span><b id="hud-ms">–</b></div>
+  <div class="row sub"><span>depth / prefilter</span><b id="hud-ms-depth">–</b></div>
+  <div class="row sub"><span>decode / raster</span><b id="hud-ms-rest">–</b></div>
+  <div class="row"><span>可见 anchors</span><b id="hud-visible">–</b></div>
+  <div class="row"><span>分辨率</span><b id="hud-res">–</b></div>
+  <div class="row"><span>decode</span><b id="hud-decode">–</b></div>
+</div>
+
+<div id="help">左键拖动 转视角 · 滚轮 前进/后退 · 右键/Shift拖动 平移 · 静止 0.3s 自动精修</div>
+
+<div id="overlay">
+  <div id="overlay-box">
+    <div class="big" id="overlay-title">正在连接后端…</div>
+    <div class="small" id="overlay-detail">ws://<span id="ws-addr"></span></div>
+    <pre id="overlay-cmd">python viewer_server.py -m output/block_5 \
+  -s data/MatrixCity/small_city/street/pose_block/block_5 \
+  --mesh mesh/block_5_reduce5.ply --port 8765</pre>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

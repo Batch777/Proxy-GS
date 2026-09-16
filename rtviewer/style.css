@@ -1,0 +1,32 @@
+html, body { margin: 0; height: 100%; background: #0b0f14; overflow: hidden;
+  font-family: "SF Mono", Consolas, "Cascadia Mono", monospace; }
+#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  cursor: grab; }
+#view:active { cursor: grabbing; }
+
+#hud { position: absolute; top: 12px; left: 12px; min-width: 230px;
+  background: rgba(10, 14, 20, .78); border: 1px solid #1f2a37; border-radius: 10px;
+  padding: 10px 12px; color: #cbd5e1; font-size: 12px; backdrop-filter: blur(6px);
+  user-select: none; pointer-events: none; }
+#hud .row { display: flex; justify-content: space-between; gap: 14px; line-height: 1.7; }
+#hud .row span { color: #64748b; }
+#hud .row b { color: #e2e8f0; font-weight: 600; }
+#hud .title { font-size: 13px; color: #f1f5f9; font-weight: 700;
+  border-bottom: 1px solid #1f2a37; padding-bottom: 4px; margin-bottom: 4px; }
+#hud .title .dim { color: #38bdf8; font-weight: 500; font-size: 11px; }
+#hud .sub span, #hud .sub b { color: #475569; font-size: 11px; }
+
+#help { position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
+  color: #475569; font-size: 12px; background: rgba(10,14,20,.6);
+  padding: 6px 14px; border-radius: 999px; user-select: none; pointer-events: none;
+  white-space: nowrap; }
+
+#overlay { position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; background: rgba(11, 15, 20, .92); transition: opacity .3s; }
+#overlay.hidden { opacity: 0; pointer-events: none; }
+#overlay-box { text-align: center; color: #94a3b8; max-width: 720px; padding: 24px; }
+#overlay-box .big { font-size: 20px; color: #e2e8f0; margin-bottom: 8px; }
+#overlay-box .small { font-size: 13px; margin-bottom: 18px; }
+#overlay-cmd { text-align: left; background: #0f172a; border: 1px solid #1f2a37;
+  border-radius: 8px; padding: 14px 16px; font-size: 12.5px; color: #7dd3fc;
+  overflow-x: auto; }

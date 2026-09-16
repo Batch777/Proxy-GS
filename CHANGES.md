@@ -5,6 +5,38 @@
 
 ---
 
+## 2026-09-16 · P2+P3：实时 Decode Viewer（viewer_server.py + rtviewer/）
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 新增 | `viewer_server.py` | WebSocket 推流后端：收相机(eye/target/up+fov+分辨率) → nvdiffrast 深度 → prefilter → MLP decode（每 K 帧，默认 8）→ 光栅化 → JPEG 推流；`--selftest N` 离线出环绕帧 | 本次 |
+| 新增 | `rtviewer/`（index.html / main.js / style.css / server.js / package.json） | 前端：第一人称式控制（原地转视角安全，滚轮沿视线前进/后退，Shift/右键平移），静止 0.3s 自动请求 1000² 精修，HUD 显示 FPS/分段耗时/可见 anchors | 本次 |
+| 修改 | `nvdiffrast_depth_renderer.py` | `render()` 增加可选 `width/height` 覆盖（单实例同时服务交互档与精修档） | 本次 |
+| 环境 | conda 安装 `websockets 16.1.1` | 后端依赖 | — |
+
+**踩坑记录**：
+- `build_camera` 初版把 OpenCV c2w 的 +z 当成 backward（实际 OpenCV +z=forward），视角朝后 180°，
+  渲染出模糊墙面；以真实数据集相机渲染对比 GT 图（`street/train/small_city_road_horizon.tar`
+  内 0000.png）后定位修复，修正后渲染与 GT 街景一致，可见 anchors 286k 与 bench 263k 吻合
+- 场景是街道数据集（相机沿 x ∈ [-5,5]、z≈0.03 一线分布），绕远处 pivot 环绕会撞墙出雾；
+  初始视角改为种子化 cam0 位姿（eye=cam0 位置，target=前方 ~6.2m），前端改第一人称式控制
+- Windows 版 node 的 fs API 对 `\\wsl.localhost\` UNC 路径返回 ENOENT（readdir/stat 均失败，
+  但 exe 加载正常）；`path.normalize` 还会吞掉 UNC 前导 `\\`。
+  解法：`npm run dev` 的 win32 分支改为 spawn **WSL 内 node**（`~/.local/node`），
+  server.js 内去掉 `path.normalize`（`path.join` 已解析 `..` 且保留 UNC 前缀）
+
+**验证**：
+- `--selftest 8`：首帧全管线 ~1.0s（含 warmup），缓存帧光栅化 0.5–63ms（视角相关），帧图目视正确
+- WebSocket 协议端到端：scene_info 握手 → 6 帧 PG 二进制包（39KB JPEG @500²），
+  缓存帧 11–18ms，EMA FPS 27+（同机测试，不含网络）
+- 静态服务器：index/main.js/style.css 全 200（`npm run dev`，WSL node v22）
+
+**使用**：先在 proxy-gs 环境终端启动后端
+`python viewer_server.py -m output/block_5 -s data/MatrixCity/small_city/street/pose_block/block_5 --mesh mesh/block_5_reduce5.ply --port 8765`，
+再打开预览页（rtviewer，`npm run dev`）。
+
+---
+
 ## 2026-09-16 · 实时 Decode Viewer（P0：Vulkan 环境验证 → 结论不可用，转 nvdiffrast）
 
 **P0 结论：WSL2 无法使用官方 Vulkan-Cuda-Interop 路径**，证据链：

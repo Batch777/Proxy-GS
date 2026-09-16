@@ -58,20 +58,25 @@ class NvdiffrastMeshDepthRenderer:
     @torch.inference_mode()
     def render(self, camera_R=None, camera_T=None, *,
                fx=None, fy=None, cx=None, cy=None,
-               znear=0.01, zfar=1000.0):
+               znear=0.01, zfar=1000.0,
+               width=None, height=None):
         """Same contract as VK2TorchRenderer.render().
 
         camera_R follows the 3DGS Camera convention (world->cam stored
         transposed), exactly like render_real.py passes viewpoint_camera.R.
+        width/height optionally override the construction resolution so a
+        single instance can serve interactive + refine tiers.
         Returns: float32 CUDA tensor [H, W], linear view-space depth,
         +inf where the proxy mesh misses.
         """
+        W = int(width) if width else self.width
+        H = int(height) if height else self.height
         # Undo the 3DGS transpose (identical to to_vulkan_viewproj_match_nvdiffrast)
         R = np.swapaxes(np.asarray(camera_R, np.float32), -1, -2)
         T = np.asarray(camera_T, np.float32)
 
         cam_params = Build_Ply_Render_Camera_Parameters_colmap_correct(
-            fx, fy, cx, cy, self.width, self.height, znear, zfar, R, T, self.device
+            fx, fy, cx, cy, W, H, znear, zfar, R, T, self.device
         )
         depth, _mask = self._depth_renderer.render_depth_batched(
             mesh=self._mesh,

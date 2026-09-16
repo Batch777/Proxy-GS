@@ -1,0 +1,12 @@
+{
+  "name": "proxy-gs-rtviewer",
+  "version": "1.0.0",
+  "description": "Proxy-GS realtime decode viewer (websocket streaming client)",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node -e \"const c=require('child_process');if(process.platform==='win32'){c.spawn('wsl',['-d','Ubuntu-22.04','--','/home/steven/.local/node/bin/node','/home/steven/Proxy-GS/rtviewer/server.js',...process.argv.slice(1)],{stdio:'inherit'})}else{c.spawn(process.execPath,['/home/steven/Proxy-GS/rtviewer/server.js',...process.argv.slice(1)],{stdio:'inherit'})}\" --",
+    "dev:wsl": "node server.js",
+    "start": "node server.js"
+  },
+  "private": true
+}
