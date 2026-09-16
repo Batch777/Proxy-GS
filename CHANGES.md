@@ -5,6 +5,15 @@
 
 ---
 
+## 2026-09-16 · viewer：WASD/QE 飞行控制 + 灵敏度调节
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 修改 | `rtviewer/main.js` | 新增 WASD 平移 + QE 升降（按住连续移动，dt 积分，速度随 pivotDist 自适应）；旋转/滚轮接入灵敏度系数；`node --check` 通过 | 本次 |
+| 修改 | `rtviewer/index.html` / `style.css` | 右上角设置面板：移动速度 / 旋转灵敏度 / 滚轮速度三条滑杆（0.2×–5× / 0.2×–3× / 0.2×–3×）；帮助条更新 | 本次 |
+
+---
+
 ## 2026-09-16 · 推送 fork（不含 test/）
 
 - 本地 15 个 commit 通过 `upstream-clean` 分支推送到 `github.com/Batch777/Proxy-GS` 的 `main`

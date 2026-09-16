@@ -21,6 +21,14 @@ html, body { margin: 0; height: 100%; background: #0b0f14; overflow: hidden;
   padding: 6px 14px; border-radius: 999px; user-select: none; pointer-events: none;
   white-space: nowrap; }
 
+#settings { position: absolute; top: 12px; right: 12px; width: 240px;
+  background: rgba(10, 14, 20, .78); border: 1px solid #1f2a37; border-radius: 10px;
+  padding: 10px 12px; color: #cbd5e1; font-size: 12px; backdrop-filter: blur(6px); }
+#settings .srow { display: flex; align-items: center; gap: 8px; line-height: 2; }
+#settings label { color: #64748b; width: 60px; flex: none; }
+#settings input[type="range"] { flex: 1; accent-color: #38bdf8; height: 14px; }
+#settings b { color: #e2e8f0; width: 36px; text-align: right; font-weight: 600; }
+
 #overlay { position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; background: rgba(11, 15, 20, .92); transition: opacity .3s; }
 #overlay.hidden { opacity: 0; pointer-events: none; }

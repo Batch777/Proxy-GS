@@ -29,6 +29,18 @@ function targetPoint() {
   return add3(orbit.eye, mul3(viewDir(), orbit.pivotDist));
 }
 
+// ------------------------------------------------------------ sensitivity --
+const sens = { move: 1.0, rotate: 1.0, wheel: 1.0 };
+function bindSens(id, key, fmt) {
+  const el = $(id), lab = $(id + "-v");
+  const apply = () => {
+    sens[key] = parseFloat(el.value);
+    lab.textContent = fmt(sens[key]);
+  };
+  el.addEventListener("input", apply);
+  apply();
+}
+
 // ------------------------------------------------------------ interaction --
 let dragging = false, panning = false, lastX = 0, lastY = 0;
 let dirty = true;                 // camera changed, need to (re)send
@@ -39,6 +51,36 @@ function markDirty() {
   dirty = true;
   refineSent = false;
   lastInputTs = performance.now();
+}
+
+// WASD + QE fly controls (held keys, integrated per-frame in tick)
+const keysDown = new Set();
+const MOVE_CODES = new Set(["KeyW", "KeyA", "KeyS", "KeyD", "KeyQ", "KeyE"]);
+window.addEventListener("keydown", (e) => {
+  if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+  if (!MOVE_CODES.has(e.code)) return;
+  e.preventDefault();
+  if (!keysDown.has(e.code)) { keysDown.add(e.code); }
+});
+window.addEventListener("keyup", (e) => keysDown.delete(e.code));
+window.addEventListener("blur", () => keysDown.clear());
+
+function moveStep(dt) {
+  if (keysDown.size === 0) return;
+  const fwd = viewDir();
+  const right = norm3(cross3(fwd, orbit.up));
+  // base speed scales with scene distance so it feels right at any zoom
+  const speed = orbit.pivotDist * 0.8 * sens.move;   // units per second
+  let v = [0, 0, 0];
+  if (keysDown.has("KeyW")) v = add3(v, fwd);
+  if (keysDown.has("KeyS")) v = sub3(v, fwd);
+  if (keysDown.has("KeyD")) v = add3(v, right);
+  if (keysDown.has("KeyA")) v = sub3(v, right);
+  if (keysDown.has("KeyE")) v = add3(v, orbit.up);
+  if (keysDown.has("KeyQ")) v = sub3(v, orbit.up);
+  if (v[0] === 0 && v[1] === 0 && v[2] === 0) return;
+  orbit.eye = add3(orbit.eye, mul3(norm3(v), speed * dt));
+  markDirty();
 }
 
 canvas.addEventListener("pointerdown", (e) => {
@@ -59,8 +101,8 @@ canvas.addEventListener("pointermove", (e) => {
     const scale = orbit.pivotDist * Math.tan(orbit.fovx_deg * Math.PI / 360) * 2 / canvas.clientHeight;
     orbit.eye = add3(orbit.eye, add3(mul3(right, -dx * scale), mul3(upv, dy * scale)));
   } else {
-    orbit.az -= dx * 0.005;
-    orbit.el = Math.min(Math.PI / 2 - 0.02, Math.max(-Math.PI / 2 + 0.02, orbit.el - dy * 0.005));
+    orbit.az -= dx * 0.005 * sens.rotate;
+    orbit.el = Math.min(Math.PI / 2 - 0.02, Math.max(-Math.PI / 2 + 0.02, orbit.el - dy * 0.005 * sens.rotate));
   }
   markDirty();
 });
@@ -69,7 +111,7 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
   // dolly along the view direction, clamp to a sane corridor
-  const step = orbit.pivotDist * (Math.exp(-e.deltaY * 0.0012) - 1);
+  const step = orbit.pivotDist * (Math.exp(-e.deltaY * 0.0012 * sens.wheel) - 1);
   orbit.eye = add3(orbit.eye, mul3(viewDir(), step));
   markDirty();
 }, { passive: false });
@@ -155,11 +197,18 @@ const INTERACTIVE_W = 500;
 const REFINE_W = 1000;
 const REFINE_IDLE_MS = 300;
 
+let lastTickTs = performance.now();
+
 function tick() {
   requestAnimationFrame(tick);
+  const now = performance.now();
+  const dt = Math.min(0.1, (now - lastTickTs) / 1000);
+  lastTickTs = now;
   if (!orbit.ready || !ws || ws.readyState !== WebSocket.OPEN) return;
 
-  const idleMs = performance.now() - lastInputTs;
+  moveStep(dt);   // WASD/QE held-key movement (calls markDirty when moving)
+
+  const idleMs = now - lastInputTs;
   const wantRefine = idleMs > REFINE_IDLE_MS;
   if (!dirty && !(wantRefine && !refineSent)) return;
 
@@ -176,5 +225,8 @@ function tick() {
   if (refine) refineSent = true;
 }
 
+bindSens("sens-move", "move", (v) => v.toFixed(1) + "×");
+bindSens("sens-rotate", "rotate", (v) => v.toFixed(1) + "×");
+bindSens("sens-wheel", "wheel", (v) => v.toFixed(1) + "×");
 connect();
 tick();
