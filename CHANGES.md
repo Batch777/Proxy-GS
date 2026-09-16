@@ -5,6 +5,26 @@
 
 ---
 
+## 2026-09-16 · viewer：WASD/QE 飞行控制 + 灵敏度调节
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 修改 | `rtviewer/main.js` | 新增 WASD 平移 + QE 升降（按住连续移动，dt 积分，速度随 pivotDist 自适应）；旋转/滚轮接入灵敏度系数；`node --check` 通过 | 本次 |
+| 修改 | `rtviewer/index.html` / `style.css` | 右上角设置面板：移动速度 / 旋转灵敏度 / 滚轮速度三条滑杆（0.2×–5× / 0.2×–3× / 0.2×–3×）；帮助条更新 | 本次 |
+
+---
+
+## 2026-09-16 · 推送 fork（不含 test/）
+
+- 本地 15 个 commit 通过 `upstream-clean` 分支推送到 `github.com/Batch777/Proxy-GS` 的 `main`
+  （远端 tip `13191ee` = 本地 `upstream-clean`）
+- `upstream-clean` = `main` + 一个 `git rm -r test` 提交：**test/ 测试与基准脚本只留在本地 main，不上 fork**
+- 其余全部入库：`viewer_server.py`、`rtviewer/`、`nvdiffrast_depth_renderer.py`、
+  `depth_viewer.py`、`export_decoded_ply.py`、`plot_render_pipeline.py`、`CHANGES.md`、训练修复链等
+- 后续推送流程：`git checkout upstream-clean && git merge main && git rm -r --cached test 或保持移除 && push`
+
+---
+
 ## 2026-09-16 · 整理：test/benchmark 脚本迁入 test/
 
 | 类型 | 文件 | 说明 | Commit |
