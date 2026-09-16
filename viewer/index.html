@@ -46,18 +46,17 @@
 </div>
 
 <div class="hud" id="bench">
-  <h3>对比：Python 管线 (RTX 4090D, 街景正视 4.3M anchors)</h3>
+  <h3>对比：Python 管线 (RTX 4090D, 遮挡剔除开启)</h3>
   <table>
-    <tr><td>prefilter</td><td class="dim">4.8 ms</td></tr>
-    <tr><td>decode (MLP)</td><td class="dim">≈124 ms</td></tr>
-    <tr><td>光栅化 @250² / @500²</td><td class="dim">23.7 / 68.0 ms</td></tr>
-    <tr><td>直接 render @250² / @500²</td><td>6.4 / 5.1 FPS</td></tr>
-    <tr><td>decode 摊销 K=20 @250²</td><td>28.9 FPS</td></tr>
-    <tr><td>decode 摊销 K=20 @500²</td><td>12.7 FPS</td></tr>
-    <tr><td>摊销上限 @250² / @500²</td><td>35 / 13.8 FPS</td></tr>
+    <tr><td>可见 anchors（遮挡剔除后）</td><td class="dim">≈180k (原 4.3M)</td></tr>
+    <tr><td>prefilter / decode / 光栅化 @250²</td><td class="dim">3.8 / 7.9 / 15.0 ms</td></tr>
+    <tr><td>直接 render @250²</td><td>37.4 FPS</td></tr>
+    <tr><td>直接 render @500² / @1000²</td><td>52.7 / 50.2 FPS</td></tr>
+    <tr><td>decode 摊销 K=20 @500²</td><td>83.5 FPS</td></tr>
+    <tr><td>论文 Block5（4090, 40k iters）</td><td class="dim">143–165 FPS</td></tr>
     <tr><td>本页 SparkJS (预解码)</td><td id="fpsCell" style="color:#ffd479">–</td></tr>
   </table>
-  <div class="dim" style="margin-top:6px">SparkJS 分辨率更高但画质为烘焙近似</div>
+  <div class="dim" style="margin-top:6px">论文模型约 100k anchors/帧（40k iters）；本模型 100k iters 约 180k</div>
 </div>
 
 <div class="hud" id="help">左键旋转 · 右键平移 · 滚轮缩放 · R 复位视角</div>

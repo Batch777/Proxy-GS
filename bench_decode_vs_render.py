@@ -47,8 +47,22 @@ def load_cams(source_path, which="transforms_test.json", max_cams=20, downscale=
         world_view = torch.tensor(getWorld2View2(R, T)).float().transpose(0, 1).cuda()
         proj = torch.tensor(getProjectionMatrix(znear=0.01, zfar=100.0, fovX=fovx, fovY=fovy)).float().transpose(0, 1).cuda()
         full_proj = (world_view.unsqueeze(0).bmm(proj.unsqueeze(0))).squeeze(0)
-        cams.append(MiniCam(w, h, fovy, fovx, 0.01, 100.0, world_view, full_proj))
+        cam = MiniCam(w, h, fovy, fovx, 0.01, 100.0, world_view, full_proj)
+        cam.image_name = os.path.splitext(os.path.basename(frame["file_path"]))[0]
+        cams.append(cam)
     return cams
+
+
+def load_depth(cam, depth_dir, device="cuda"):
+    """Load precomputed proxy-mesh depth for a camera (native res = -r 4),
+    nearest-upsampled to the camera resolution when needed."""
+    path = os.path.join(depth_dir, cam.image_name + ".npy")
+    d = torch.from_numpy(np.load(path)).float().squeeze().to(device)
+    H, W = int(cam.image_height), int(cam.image_width)
+    if d.shape != (H, W):
+        d = torch.nn.functional.interpolate(
+            d[None, None], size=(H, W), mode="nearest")[0, 0]
+    return d
 
 
 def timed(fn, warmup=2, rep=5):
@@ -72,6 +86,9 @@ def main():
     parser.add_argument("--max_cams", type=int, default=20)
     parser.add_argument("--downscale", type=int, default=4)
     parser.add_argument("--rep", type=int, default=5)
+    parser.add_argument("--depth_dir", type=str, default=None,
+                        help="dir of precomputed proxy-mesh depth npy (per image_name); "
+                             "enables paper-style occlusion culling in prefilter_voxel")
     args = parser.parse_args()
 
     cfg = load_cfg(args.model_path)
@@ -97,7 +114,10 @@ def main():
     rows = []
     with torch.no_grad():
         for cam in cams:
-            t_pre, (vmask, _) = timed(lambda: prefilter_voxel(cam, gaussians, pipe, background), rep=args.rep)
+            depth_m = load_depth(cam, args.depth_dir) if args.depth_dir else None
+            t_pre, (vmask, _) = timed(
+                lambda: prefilter_voxel(cam, gaussians, pipe, background, depth_map=depth_m),
+                rep=args.rep)
             n_vis = int(vmask.sum().item())
             t_dec, _ = timed(lambda: generate_neural_gaussians(cam, gaussians, vmask), rep=args.rep)
             t_ren, out = timed(lambda: render(cam, gaussians, pipe, background, visible_mask=vmask), rep=args.rep)

@@ -43,7 +43,7 @@ ax.text(76, 97.5, "② 一次性离线导出 → SparkJS 静态渲染", ha="cent
 # ---------------- left column ----------------
 LX = 6
 box(LX, 86, 38, 8, "checkpoint（iteration_100000）\nanchors 7.80M · feat 32d · offsets ×10 · scaling", C_STORE)
-box(LX, 72.5, 38, 8, "prefilter_voxel\n视锥剔除（深度纹理，256B pitch 对齐）", C_OP)
+box(LX, 72.5, 38, 8, "prefilter_voxel\n视锥剔除 + 代理网格深度遮挡剔除", C_OP)
 box(LX, 59, 38, 8, "generate_neural_gaussians\nopacity / color / cov 三个 MLP 解码（视角相关）", C_OP)
 box(LX, 45.5, 38, 8, "neural gaussians（每帧生成）\nxyz + opacity + color + scale + rot", C_STORE)
 box(LX, 32, 38, 8, "diff-gaussian-rasterization\n标准 3DGS 光栅化", C_OP)
@@ -56,12 +56,12 @@ arrow(25, 45.5, 25, 40.8)
 arrow(25, 32, 25, 27.8)
 
 # timing annotations on the right of left column
-ax.text(45.5, 76.5, "4.8 ms", fontsize=10, color="#b45309", weight="bold")
-ax.text(45.5, 68.6, "≈124 ms ≈ 80%", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
-ax.text(45.5, 36, "23.7 ms @250²\n68.0 ms @500²", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
-ax.text(45.5, 50, "可见 anchors\n≈ 4.3M（街景正视）", fontsize=9.5, color="#475569", ha="left", va="center")
+ax.text(45.5, 76.5, "3.8 ms", fontsize=10, color="#b45309", weight="bold")
+ax.text(45.5, 68.6, "≈7.9 ms", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
+ax.text(45.5, 36, "15.0 ms @250²\n7.6 ms @500²", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
+ax.text(45.5, 50, "可见 anchors\n≈ 180k（遮挡剔除后）", fontsize=9.5, color="#475569", ha="left", va="center")
 
-box(LX, 6, 38, 9, "每帧全跑 @250²：156 ms ⇒ 6.4 FPS\ndecode 摊销 K=20 @250²：34.6 ms ⇒ 28.9 FPS\n@500²：直接 5.1 FPS ／ 摊销 12.7 FPS", C_BAD, fs=10)
+box(LX, 6, 38, 9, "每帧全跑：37 FPS @250² ／ 53 FPS @500²\ndecode 摊销 K=20 @500²：84 FPS\n论文 Block5（4090, 40k iters）：143–165 FPS", C_BAD, fs=10)
 
 # ---------------- right column ----------------
 RX = 57
@@ -86,7 +86,7 @@ ax.add_patch(FancyArrowPatch((44.5, 63), (57.5, 63), arrowstyle="-|>", mutation_
                              color="#7c3aed", lw=1.8, linestyle="--", zorder=1))
 ax.text(51, 60.9, "烘焙一次\n省去每帧 decode", ha="center", fontsize=9.5, color="#7c3aed")
 
-ax.text(50, 1.5, "结论：decode 占神经管线约 8 成（4.3M 可见 anchors）；静态烘焙 + SparkJS 以“视角相关效果冻结”为代价换 ~9 倍帧率",
+ax.text(50, 1.5, "结论：遮挡剔除把可见 anchors 从 4.3M 压到 ~180k；Python 管线 50+ FPS，SparkJS 烘焙以“视角相关效果冻结”为代价换稳定 60 FPS 与零 Python 依赖",
         ha="center", fontsize=11, color="#334155", weight="bold")
 
 fig.savefig(r"\\wsl.localhost\Ubuntu-22.04\home\steven\Proxy-GS\render_pipeline.png", bbox_inches="tight")
