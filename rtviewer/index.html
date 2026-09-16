@@ -9,6 +9,9 @@
 <body>
 <canvas id="view"></canvas>
 
+<div id="gt-pane"><img id="gt-img" alt=""><div class="pane-label" id="gt-label">GT</div></div>
+<div class="pane-label" id="render-label">Render</div>
+
 <div id="hud">
   <div class="row title">Proxy-GS <span class="dim">realtime decode</span></div>
   <div class="row"><span>FPS</span><b id="hud-fps">–</b></div>
@@ -19,6 +22,7 @@
   <div class="row"><span>分辨率</span><b id="hud-res">–</b></div>
   <div class="row"><span>decode</span><b id="hud-decode">–</b></div>
   <div class="row"><span>视角</span><b id="hud-cam">自由</b></div>
+  <div class="row"><span>PSNR (dB)</span><b id="hud-psnr">–</b></div>
 </div>
 
 <div id="settings">
@@ -29,6 +33,7 @@
   <div class="srow"><label>视角集</label><select id="cam-set"><option value="train">train</option><option value="test">test</option></select><b id="cam-count">–</b></div>
   <div class="srow"><label>编号</label><input id="cam-idx" type="number" min="0" value="0"><button id="cam-go">跳转</button></div>
   <div class="srow"><button id="cam-prev" style="flex:1">◀ 上一个</button><button id="cam-next" style="flex:1">下一个 ▶</button></div>
+  <div class="srow"><label>GT 对比</label><input id="gt-toggle" type="checkbox"><b id="gt-state">关</b></div>
 </div>
 
 <div id="help">左键拖动 转视角 · WASD 平移 · QE 升降 · 滚轮 前进/后退 · 右键/Shift拖动 平移 · 静止 0.3s 自动精修</div>

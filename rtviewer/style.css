@@ -35,6 +35,19 @@ html, body { margin: 0; height: 100%; background: #0b0f14; overflow: hidden;
 #settings button { background: #164e63; color: #e2e8f0; border: 1px solid #155e75;
   border-radius: 6px; padding: 3px 10px; font: inherit; cursor: pointer; }
 #settings button:hover { background: #155e75; }
+#settings input[type="checkbox"] { accent-color: #38bdf8; width: 15px; height: 15px; }
+
+#gt-pane { position: absolute; top: 0; right: 0; width: 50%; height: 100%;
+  display: none; border-left: 2px solid #38bdf8; background: #000; }
+body.gt-mode #gt-pane { display: block; }
+body.gt-mode #view { width: 50%; }
+#gt-img { width: 100%; height: 100%; object-fit: fill; display: block; }
+.pane-label { position: absolute; bottom: 12px; color: #7dd3fc; font-size: 12px;
+  background: rgba(10,14,20,.6); padding: 4px 10px; border-radius: 999px;
+  user-select: none; pointer-events: none; display: none; }
+body.gt-mode .pane-label { display: block; }
+#gt-label { right: 14px; }
+#render-label { left: 14px; }
 
 #overlay { position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; background: rgba(11, 15, 20, .92); transition: opacity .3s; }

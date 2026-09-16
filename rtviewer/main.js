@@ -44,11 +44,14 @@ function bindSens(id, key, fmt) {
 // ------------------------------------------------------- dataset cameras --
 let CAMERAS = { train: [], test: [] };
 let currentCam = null;   // {set, i, n}
+let gtMode = false;
+let lastGtUrl = null;
 
 function markFreeView() {
   if (currentCam) {
     currentCam = null;
     $("hud-cam").textContent = "自由";
+    $("hud-psnr").textContent = "–";
   }
 }
 
@@ -85,6 +88,15 @@ $("cam-prev").addEventListener("click", () => jumpCam($("cam-set").value, camInd
 $("cam-next").addEventListener("click", () => jumpCam($("cam-set").value, camIndexNow() + 1));
 $("cam-set").addEventListener("change", updateCamCount);
 $("cam-idx").addEventListener("keydown", (e) => { if (e.key === "Enter") $("cam-go").click(); });
+
+$("gt-toggle").addEventListener("change", (e) => {
+  gtMode = e.target.checked;
+  $("gt-state").textContent = gtMode ? "开" : "关";
+  document.body.classList.toggle("gt-mode", gtMode);
+  if (!gtMode) $("hud-psnr").textContent = "–";
+  markDirty();
+  lastInputTs = -1e9;   // canvas width changed -> resend immediately with GT flag
+});
 
 // ------------------------------------------------------------ interaction --
 let dragging = false, panning = false, lastX = 0, lastY = 0;
@@ -212,14 +224,25 @@ function connect() {
       }
       return;
     }
-    // binary frame: "PG" + u32 meta_len + meta json + jpeg
+    // binary frame: "PG"|"GT" + u32 meta_len + meta json + jpeg
     const buf = ev.data;
     const dv = new DataView(buf);
+    const magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1));
     const metaLen = dv.getUint32(2, true);
     const meta = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 6, metaLen)));
     const jpeg = buf.slice(6 + metaLen);
-    drawFrame(jpeg, meta);
+    if (magic === "GT") drawGt(jpeg, meta);
+    else drawFrame(jpeg, meta);
   };
+}
+
+function drawGt(jpeg, meta) {
+  const blob = new Blob([jpeg], { type: "image/jpeg" });
+  const url = URL.createObjectURL(blob);
+  $("gt-img").src = url;
+  if (lastGtUrl) URL.revokeObjectURL(lastGtUrl);
+  lastGtUrl = url;
+  $("gt-label").textContent = "GT · " + (meta.cam || "");
 }
 
 function drawFrame(jpeg, meta) {
@@ -244,6 +267,7 @@ function updateHud(meta) {
   $("hud-visible").textContent = (meta.visible / 1000).toFixed(0) + " k";
   $("hud-res").textContent = meta.w + "×" + meta.h;
   $("hud-decode").textContent = meta.decoded ? "本帧全跑" : "复用缓存";
+  if (meta.psnr !== undefined) $("hud-psnr").textContent = meta.psnr.toFixed(2);
 }
 
 // ------------------------------------------------------------ send loop ----
@@ -274,6 +298,8 @@ function tick() {
     type: "camera", seq: ++seq,
     eye: orbit.eye, target: targetPoint(), up: orbit.up,
     fovx_deg: orbit.fovx_deg, width: w, height: h, refine,
+    cam: currentCam ? { set: currentCam.set, n: currentCam.n } : null,
+    gt: gtMode && !!currentCam,
   }));
   dirty = false;
   if (refine) refineSent = true;

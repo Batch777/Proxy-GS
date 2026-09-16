@@ -5,6 +5,24 @@
 
 ---
 
+## 2026-09-16 · viewer：GT 并排对比模式（tar 流式取图 + PSNR）
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 修改 | `viewer_server.py` | 新增 `build_gt_manifest`（从 transforms json 的 file_path 推出 tar 路径与成员名）与 `TarImageStore`（扫描 tar 头建 offset 索引，之后 seek+read 流式取图，不解压）；camera 请求新增 `cam:{set,n}` 与 `gt` 字段；命中时服务端把 GT resize 到渲染尺寸、算 PSNR 写入帧 meta，并按 (split,name,W,H) 去重后以 `b"GT"` 二进制包下发 GT；`--selftest_gt test:0003` 离线验证入口 | 本次 |
+| 修改 | `rtviewer/main.js` / `index.html` / `style.css` | 设置面板新增「GT 对比」开关：开启后左 Render 右 GT 并排（50/50，角标注明机位）；请求携带 cam/gt；HUD 新增 PSNR 行，自由视角自动清掉 | 本次 |
+
+> 验证：
+> - `--selftest_gt test:0003`：tar 流式取 GT 成功，PSNR 23.63 dB，渲染/GT 逐街景对齐
+> - ws 端到端：GT 包（cam=test/0003）+ PG 帧（psnr=23.63）按序到达
+> - 浏览器实测（激活标签页后）：gt-img 1000px、角标「GT · train/0000」、PSNR 上屏、
+>   gt-mode 下半幅宽高比正确
+> - 注意：极端宽高比下 GT 被拉伸到渲染尺寸，PSNR 会失真（如 1000×2202 时 12.94 dB），
+>   方屏/正常比例下才有可比性
+> - **后端有改动，需重启 viewer_server.py 生效**
+
+---
+
 ## 2026-09-16 · 针状 artifact 四路对照实验（仅本地 main）
 
 | 类型 | 文件 | 说明 | Commit |

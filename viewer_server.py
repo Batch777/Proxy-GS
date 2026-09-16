@@ -23,8 +23,16 @@
 # Protocol:
 #   server -> client  json  {"type":"scene_info", center, radius, fovx_deg, up}
 #   client -> server  json  {"type":"camera", seq, eye, target, up,
-#                            fovx_deg, width, height, refine}
+#                            fovx_deg, width, height, refine,
+#                            cam:{set,n}|null, gt:bool}
 #   server -> client  binary  b"PG" + u32 meta_len + meta_json + jpeg_bytes
+#                      (meta carries "psnr" when gt was requested at a dataset cam)
+#   server -> client  binary  b"GT" + u32 meta_len + meta_json + jpeg_bytes
+#                      (GT image streamed from the dataset .tar, sent once per
+#                       (split, name, W, H) change)
+#
+# GT images are read straight out of the dataset tar archives (no extraction):
+# member offsets are indexed once per tar, then reads are raw seek+read.
 
 import argparse
 import asyncio
@@ -34,6 +42,7 @@ import math
 import os
 import struct
 import sys
+import tarfile
 import time
 
 import numpy as np
@@ -143,6 +152,74 @@ def scene_info_from_transforms(source_path, which="transforms_train.json"):
     }
 
 
+# ------------------------------------------------------------------- GT ----
+
+def build_gt_manifest(source_path):
+    """split -> {cam_name: (tar_path, member_name)} from transforms jsons.
+
+    GT pngs live only inside <image_dir>.tar archives; file_path entries look
+    like ../../test/small_city_road_horizon_test/0003.png, so the archive sits
+    next to the (possibly absent) extracted directory.
+    """
+    manifest = {}
+    for split, jn in (("train", "transforms_train.json"),
+                      ("test", "transforms_test.json")):
+        p = os.path.join(source_path, jn)
+        if not os.path.exists(p):
+            continue
+        with open(p) as f:
+            d = json.load(f)
+        entries = {}
+        for fr in d["frames"]:
+            img_path = os.path.normpath(os.path.join(source_path, fr["file_path"]))
+            parent, fname = os.path.split(img_path)
+            name = os.path.splitext(fname)[0]
+            tar_path = parent + ".tar"
+            member = "./" + os.path.basename(parent) + "/" + fname
+            entries[name] = (tar_path, member)
+        manifest[split] = entries
+    return manifest
+
+
+class TarImageStore:
+    """Random-access reads from uncompressed .tar without extracting.
+
+    Indexes member -> (data_offset, size) on first use by scanning tar headers
+    (data blocks are seek-skipped, so even multi-GB tars index quickly), then
+    serves raw bytes with seek+read on a persistent file handle.
+    """
+
+    def __init__(self):
+        self._index = {}
+        self._fh = {}
+
+    def _ensure(self, tar_path):
+        if tar_path in self._index:
+            return
+        idx = {}
+        with tarfile.open(tar_path, "r:") as tf:
+            for m in tf:
+                if m.isfile():
+                    idx[m.name] = (m.offset_data, m.size)
+        self._index[tar_path] = idx
+        self._fh[tar_path] = open(tar_path, "rb")
+
+    def read(self, tar_path, member):
+        self._ensure(tar_path)
+        idx = self._index[tar_path]
+        if member not in idx:
+            alt = member[2:] if member.startswith("./") else "./" + member
+            if alt in idx:
+                member = alt
+        off, size = idx[member]
+        fh = self._fh[tar_path]
+        fh.seek(off)
+        return fh.read(size)
+
+
+GT_MANIFEST = {}
+
+
 # ---------------------------------------------------------------- engine ----
 
 class Engine:
@@ -172,6 +249,10 @@ class Engine:
         self.decoded = None          # (xyz, color, opacity, scaling, rot)
         self.visible_count = 0
         self.fps_ema = 0.0
+
+        self.gt_store = TarImageStore()
+        self._gt_native = {}         # (split, name) -> uint8 HxWx3 at native res
+        self._gt_sent_key = None     # (split, name, W, H) last GT packet sent
 
     def rasterize_decoded(self, cam):
         xyz, color, opacity, scaling, rot = self.decoded
@@ -233,7 +314,7 @@ class Engine:
 
         img = (torch.clamp(image, 0.0, 1.0) * 255.0).byte()
         arr = img.permute(1, 2, 0).detach().cpu().numpy()
-        return arr, {
+        meta = {
             "type": "frame", "seq": int(req.get("seq", 0)), "w": W, "h": H,
             "ms": {k: round(v * 1000.0, 2) for k, v in t.items()},
             "fps": round(self.fps_ema, 1),
@@ -242,13 +323,45 @@ class Engine:
             "iteration": self.iteration,
         }
 
+        gt_arr = None
+        cam_ref = req.get("cam")
+        if req.get("gt") and cam_ref:
+            gt_arr, gt_key = self._load_gt(cam_ref.get("set"), cam_ref.get("n"), W, H)
+            if gt_arr is not None:
+                mse = float(np.mean(
+                    (arr.astype(np.float32) - gt_arr.astype(np.float32)) ** 2))
+                meta["psnr"] = round(10.0 * math.log10(255.0 ** 2 / max(mse, 1e-6)), 2)
+                if self._gt_sent_key == gt_key:
+                    gt_arr = None           # already sent this exact GT image
+                else:
+                    self._gt_sent_key = gt_key
+        return arr, meta, gt_arr
 
-def encode_packet(meta, rgb_arr, quality=85):
+    def _load_gt(self, split, name, W, H):
+        """GT from the dataset tar, resized to (W,H). Returns (arr, key)."""
+        from PIL import Image
+        ent = GT_MANIFEST.get(split, {}).get(name)
+        if ent is None:
+            return None, None
+        native = self._gt_native.get((split, name))
+        if native is None:
+            raw = self.gt_store.read(*ent)
+            native = np.asarray(Image.open(io.BytesIO(raw)).convert("RGB"))
+            self._gt_native[(split, name)] = native
+        if native.shape[1] == W and native.shape[0] == H:
+            resized = native
+        else:
+            resized = np.asarray(
+                Image.fromarray(native).resize((W, H), Image.BILINEAR))
+        return resized, (split, name, W, H)
+
+
+def encode_packet(meta, rgb_arr, quality=85, magic=b"PG"):
     from PIL import Image
     buf = io.BytesIO()
     Image.fromarray(rgb_arr).save(buf, format="JPEG", quality=quality)
     meta_b = json.dumps(meta).encode()
-    return struct.pack("<2sI", b"PG", len(meta_b)) + meta_b + buf.getvalue()
+    return struct.pack("<2sI", magic, len(meta_b)) + meta_b + buf.getvalue()
 
 
 # --------------------------------------------------------------- server ----
@@ -266,8 +379,13 @@ async def handle_client(ws, engine):
             if req is not None and req["seq"] != rendered_seq:
                 rendered_seq = req["seq"]
                 try:
-                    arr, meta = await asyncio.get_event_loop().run_in_executor(
+                    arr, meta, gt_arr = await asyncio.get_event_loop().run_in_executor(
                         None, engine.render_frame, req)
+                    if gt_arr is not None:
+                        await ws.send(encode_packet(
+                            {"type": "gt", "w": meta["w"], "h": meta["h"],
+                             "cam": req["cam"]["set"] + "/" + req["cam"]["n"]},
+                            gt_arr, quality=90, magic=b"GT"))
                     await ws.send(encode_packet(meta, arr))
                 except Exception as e:
                     import traceback
@@ -311,6 +429,29 @@ def selftest(args):
     el0 = math.asin(d[2] / radius)
     az0 = math.atan2(d[1], d[0])
     os.makedirs(args.selftest_out, exist_ok=True)
+    from PIL import Image
+
+    if args.selftest_gt:
+        # Render one dataset camera pose with GT compare (PSNR + saved GT).
+        split, name = args.selftest_gt.split(":", 1)
+        cam = next(c for c in SCENE_INFO["cameras"][split] if c["n"] == name)
+        eye = cam["e"]
+        fwd = cam["f"]
+        req = {"seq": 0, "eye": eye, "target": [eye[i] + fwd[i] * 5.0 for i in range(3)],
+               "up": [0, 0, 1], "fovx_deg": SCENE_INFO["fovx_deg"],
+               "width": 500, "height": 500, "refine": True,
+               "cam": {"set": split, "n": name}, "gt": True}
+        arr, meta, gt_arr = engine.render_frame(req)
+        rp = os.path.join(args.selftest_out, f"gt_render_{split}_{name}.jpg")
+        Image.fromarray(arr).save(rp, quality=90)
+        print(f"[selftest_gt] render -> {rp}  psnr={meta.get('psnr')} "
+              f"visible={meta['visible']}")
+        if gt_arr is not None:
+            gp = os.path.join(args.selftest_out, f"gt_image_{split}_{name}.jpg")
+            Image.fromarray(gt_arr).save(gp, quality=90)
+            print(f"[selftest_gt] gt     -> {gp}")
+        return
+
     n = args.selftest
     for i in range(n):
         az = az0 + 2 * math.pi * i / n
@@ -320,7 +461,7 @@ def selftest(args):
         req = {"seq": i, "eye": eye.tolist(), "target": pivot.tolist(),
                "up": [0, 0, 1], "fovx_deg": SCENE_INFO["fovx_deg"],
                "width": 500, "height": 500, "refine": i == 0}
-        arr, meta = engine.render_frame(req)
+        arr, meta, _gt = engine.render_frame(req)
         from PIL import Image
         path = os.path.join(args.selftest_out, f"frame_{i:03d}.jpg")
         Image.fromarray(arr).save(path, quality=90)
@@ -344,12 +485,19 @@ if __name__ == "__main__":
     parser.add_argument("--zfar", type=float, default=100.0)
     parser.add_argument("--selftest", type=int, default=0, metavar="N")
     parser.add_argument("--selftest_out", type=str, default="selftest_frames")
+    parser.add_argument("--selftest_gt", type=str, default="",
+                        help="e.g. test:0003 — also stream that GT from tar, "
+                             "report PSNR, save gt_<name>.jpg next to frames")
     args = parser.parse_args()
 
     info = scene_info_from_transforms(args.source_path)
     SCENE_INFO.update({"type": "scene_info", "up": [0, 0, 1], **info})
     print(f"[server] scene center={np.round(info['center'], 2).tolist()} "
           f"radius={info['radius']:.1f} fovx={info['fovx_deg']:.1f}")
+    GT_MANIFEST.update(build_gt_manifest(args.source_path))
+    print(f"[server] GT manifest: "
+          f"train={len(GT_MANIFEST.get('train', {}))} "
+          f"test={len(GT_MANIFEST.get('test', {}))}")
 
     if args.selftest > 0:
         selftest(args)
