@@ -41,6 +41,51 @@ function bindSens(id, key, fmt) {
   apply();
 }
 
+// ------------------------------------------------------- dataset cameras --
+let CAMERAS = { train: [], test: [] };
+let currentCam = null;   // {set, i, n}
+
+function markFreeView() {
+  if (currentCam) {
+    currentCam = null;
+    $("hud-cam").textContent = "自由";
+  }
+}
+
+function jumpCam(set, i) {
+  const list = CAMERAS[set] || [];
+  if (list.length === 0) return;
+  i = ((i % list.length) + list.length) % list.length;
+  const c = list[i];
+  markDirty();
+  orbit.eye = c.e.slice();
+  orbit.az = Math.atan2(c.f[1], c.f[0]);
+  orbit.el = Math.asin(Math.max(-1, Math.min(1, c.f[2])));
+  orbit.pivotDist = 5.0;
+  currentCam = { set, i, n: c.n };
+  $("hud-cam").textContent = set + "/" + c.n;
+  $("cam-idx").value = i;
+  lastInputTs = -1e9;      // force an immediate full-pipeline refine frame
+}
+
+function camIndexNow() {
+  const set = $("cam-set").value;
+  if (currentCam && currentCam.set === set) return currentCam.i;
+  return parseInt($("cam-idx").value || "0", 10) || 0;
+}
+
+function updateCamCount() {
+  const l = CAMERAS[$("cam-set").value] || [];
+  $("cam-count").textContent = l.length ? "0–" + (l.length - 1) : "–";
+  $("cam-idx").max = Math.max(0, l.length - 1);
+}
+
+$("cam-go").addEventListener("click", () => jumpCam($("cam-set").value, camIndexNow()));
+$("cam-prev").addEventListener("click", () => jumpCam($("cam-set").value, camIndexNow() - 1));
+$("cam-next").addEventListener("click", () => jumpCam($("cam-set").value, camIndexNow() + 1));
+$("cam-set").addEventListener("change", updateCamCount);
+$("cam-idx").addEventListener("keydown", (e) => { if (e.key === "Enter") $("cam-go").click(); });
+
 // ------------------------------------------------------------ interaction --
 let dragging = false, panning = false, lastX = 0, lastY = 0;
 let dirty = true;                 // camera changed, need to (re)send
@@ -80,6 +125,7 @@ function moveStep(dt) {
   if (keysDown.has("KeyQ")) v = sub3(v, orbit.up);
   if (v[0] === 0 && v[1] === 0 && v[2] === 0) return;
   orbit.eye = add3(orbit.eye, mul3(norm3(v), speed * dt));
+  markFreeView();
   markDirty();
 }
 
@@ -100,6 +146,7 @@ canvas.addEventListener("pointermove", (e) => {
     const upv = cross3(right, fwd);
     const scale = orbit.pivotDist * Math.tan(orbit.fovx_deg * Math.PI / 360) * 2 / canvas.clientHeight;
     orbit.eye = add3(orbit.eye, add3(mul3(right, -dx * scale), mul3(upv, dy * scale)));
+    markFreeView();
   } else {
     orbit.az -= dx * 0.005 * sens.rotate;
     orbit.el = Math.min(Math.PI / 2 - 0.02, Math.max(-Math.PI / 2 + 0.02, orbit.el - dy * 0.005 * sens.rotate));
@@ -113,6 +160,7 @@ canvas.addEventListener("wheel", (e) => {
   // dolly along the view direction, clamp to a sane corridor
   const step = orbit.pivotDist * (Math.exp(-e.deltaY * 0.0012 * sens.wheel) - 1);
   orbit.eye = add3(orbit.eye, mul3(viewDir(), step));
+  markFreeView();
   markDirty();
 }, { passive: false });
 
@@ -150,6 +198,12 @@ function connect() {
         orbit.pivotDist = Math.hypot(...d);
         orbit.el = Math.asin(d[2] / orbit.pivotDist);
         orbit.az = Math.atan2(d[1], d[0]);
+        CAMERAS = msg.cameras || { train: [], test: [] };
+        updateCamCount();
+        if (CAMERAS.train.length > 0) {
+          currentCam = { set: "train", i: 0, n: CAMERAS.train[0].n };
+          $("hud-cam").textContent = "train/" + CAMERAS.train[0].n;
+        }
         orbit.ready = true;
         $("overlay").classList.add("hidden");
         markDirty();
