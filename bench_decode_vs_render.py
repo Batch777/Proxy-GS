@@ -86,6 +86,9 @@ def main():
     parser.add_argument("--max_cams", type=int, default=20)
     parser.add_argument("--downscale", type=int, default=4)
     parser.add_argument("--rep", type=int, default=5)
+    parser.add_argument("--which", type=str, default="transforms_test.json",
+                        help="which transforms json to load cameras from; MUST match the "
+                             "camera set that depth_dir npy was generated from")
     parser.add_argument("--depth_dir", type=str, default=None,
                         help="dir of precomputed proxy-mesh depth npy (per image_name); "
                              "enables paper-style occlusion culling in prefilter_voxel")
@@ -107,7 +110,7 @@ def main():
     gaussians.eval()
     print(f"loaded iteration_{iteration}, anchors={gaussians.get_anchor.shape[0]}")
 
-    cams = load_cams(args.source_path, max_cams=args.max_cams, downscale=args.downscale)
+    cams = load_cams(args.source_path, which=args.which, max_cams=args.max_cams, downscale=args.downscale)
     pipe = Pipe()
     background = torch.zeros(3, device="cuda")
 

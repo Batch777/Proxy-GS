@@ -56,12 +56,12 @@ arrow(25, 45.5, 25, 40.8)
 arrow(25, 32, 25, 27.8)
 
 # timing annotations on the right of left column
-ax.text(45.5, 76.5, "3.8 ms", fontsize=10, color="#b45309", weight="bold")
-ax.text(45.5, 68.6, "≈7.9 ms", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
-ax.text(45.5, 36, "15.0 ms @250²\n7.6 ms @500²", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
-ax.text(45.5, 50, "可见 anchors\n≈ 180k（遮挡剔除后）", fontsize=9.5, color="#475569", ha="left", va="center")
+ax.text(45.5, 76.5, "6.1 ms", fontsize=10, color="#b45309", weight="bold")
+ax.text(45.5, 68.6, "≈16.6 ms", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
+ax.text(45.5, 36, "32.3 ms @250²\n17.3 ms @500²", fontsize=10, color="#b45309", weight="bold", ha="left", va="center")
+ax.text(45.5, 50, "可见 anchors\n≈ 263k（遮挡剔除后）", fontsize=9.5, color="#475569", ha="left", va="center")
 
-box(LX, 6, 38, 9, "每帧全跑：37 FPS @250² ／ 53 FPS @500²\ndecode 摊销 K=20 @500²：84 FPS\n论文 Block5（4090, 40k iters）：143–165 FPS", C_BAD, fs=10)
+box(LX, 6, 38, 9, "每帧全跑：18 FPS @250² ／ 25 FPS @500²\ndecode 摊销 K=20 @500²：41 FPS\n论文 Block5（4090, 40k iters）：143–165 FPS", C_BAD, fs=10)
 
 # ---------------- right column ----------------
 RX = 57
@@ -86,7 +86,7 @@ ax.add_patch(FancyArrowPatch((44.5, 63), (57.5, 63), arrowstyle="-|>", mutation_
                              color="#7c3aed", lw=1.8, linestyle="--", zorder=1))
 ax.text(51, 60.9, "烘焙一次\n省去每帧 decode", ha="center", fontsize=9.5, color="#7c3aed")
 
-ax.text(50, 1.5, "结论：遮挡剔除把可见 anchors 从 4.3M 压到 ~180k；Python 管线 50+ FPS，SparkJS 烘焙以“视角相关效果冻结”为代价换稳定 60 FPS 与零 Python 依赖",
+ax.text(50, 1.5, "结论：遮挡剔除把可见 anchors 从 4.3M 压到 ~263k；Python 管线 ~25 FPS（K=20 摊销 41 FPS），SparkJS 烘焙以“视角相关效果冻结”为代价换稳定 60 FPS 与零 Python 依赖",
         ha="center", fontsize=11, color="#334155", weight="bold")
 
 fig.savefig(r"\\wsl.localhost\Ubuntu-22.04\home\steven\Proxy-GS\render_pipeline.png", bbox_inches="tight")
