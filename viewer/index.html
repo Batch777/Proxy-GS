@@ -46,18 +46,18 @@
 </div>
 
 <div class="hud" id="bench">
-  <h3>对比：Python 管线 @250×250 (RTX 4090D)</h3>
+  <h3>对比：Python 管线 (RTX 4090D, 街景正视 4.3M anchors)</h3>
   <table>
-    <tr><td>prefilter</td><td class="dim">2.31 ms</td></tr>
-    <tr><td>decode (MLP)</td><td class="dim">33.54 ms</td></tr>
-    <tr><td>光栅化</td><td class="dim">31.15 ms</td></tr>
-    <tr><td>直接 render (每帧 decode)</td><td>14.9 FPS</td></tr>
-    <tr><td>decode 摊销 K=5</td><td>24.9 FPS</td></tr>
-    <tr><td>decode 摊销 K=20</td><td>28.5 FPS</td></tr>
-    <tr><td>decode 摊销 K=100</td><td>29.6 FPS</td></tr>
+    <tr><td>prefilter</td><td class="dim">4.8 ms</td></tr>
+    <tr><td>decode (MLP)</td><td class="dim">≈124 ms</td></tr>
+    <tr><td>光栅化 @250² / @500²</td><td class="dim">23.7 / 68.0 ms</td></tr>
+    <tr><td>直接 render @250² / @500²</td><td>6.4 / 5.1 FPS</td></tr>
+    <tr><td>decode 摊销 K=20 @250²</td><td>28.9 FPS</td></tr>
+    <tr><td>decode 摊销 K=20 @500²</td><td>12.7 FPS</td></tr>
+    <tr><td>摊销上限 @250² / @500²</td><td>35 / 13.8 FPS</td></tr>
     <tr><td>本页 SparkJS (预解码)</td><td id="fpsCell" style="color:#ffd479">–</td></tr>
   </table>
-  <div class="dim" style="margin-top:6px">分辨率不同，仅作量级参考</div>
+  <div class="dim" style="margin-top:6px">SparkJS 分辨率更高但画质为烘焙近似</div>
 </div>
 
 <div class="hud" id="help">左键旋转 · 右键平移 · 滚轮缩放 · R 复位视角</div>
