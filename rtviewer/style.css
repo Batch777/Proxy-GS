@@ -28,6 +28,13 @@ html, body { margin: 0; height: 100%; background: #0b0f14; overflow: hidden;
 #settings label { color: #64748b; width: 60px; flex: none; }
 #settings input[type="range"] { flex: 1; accent-color: #38bdf8; height: 14px; }
 #settings b { color: #e2e8f0; width: 36px; text-align: right; font-weight: 600; }
+#settings .ssep { border-top: 1px solid #1f2a37; margin: 6px 0 2px; }
+#settings select, #settings input[type="number"] { flex: 1; background: #0f172a;
+  color: #e2e8f0; border: 1px solid #1f2a37; border-radius: 6px; padding: 3px 6px;
+  font: inherit; min-width: 0; }
+#settings button { background: #164e63; color: #e2e8f0; border: 1px solid #155e75;
+  border-radius: 6px; padding: 3px 10px; font: inherit; cursor: pointer; }
+#settings button:hover { background: #155e75; }
 
 #overlay { position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; background: rgba(11, 15, 20, .92); transition: opacity .3s; }

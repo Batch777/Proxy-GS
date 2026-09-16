@@ -5,6 +5,19 @@
 
 ---
 
+## 2026-09-16 · viewer：train/test 数据集视角跳转
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 修改 | `viewer_server.py` | `scene_info_from_transforms` 现在同时解析 `transforms_train.json`(1580) 与 `transforms_test.json`(185)，随 scene_info 下发全部相机位姿（name/eye/fwd，4 位小数压缩，~130KB） | 本次 |
+| 修改 | `rtviewer/main.js` / `index.html` / `style.css` | 设置面板新增视角跳转区：train/test 下拉 + 编号输入 + 跳转/上一个/下一个；跳转后立即发一帧 refine（全管线 depth+prefilter+decode）；HUD 新增「视角」行显示 `train/0003`，手动移动后变回「自由」 | 本次 |
+
+> 验证：协议端到端——相机列表下发数量正确，跳转 test/0003 渲染出图正常
+> （visible 152k，fresh decode，街景构图合理）；`node --check` 通过。
+> **后端有改动，需重启 viewer_server.py 生效。**
+
+---
+
 ## 2026-09-16 · viewer：WASD/QE 飞行控制 + 灵敏度调节
 
 | 类型 | 文件 | 说明 | Commit |

@@ -115,9 +115,31 @@ def scene_info_from_transforms(source_path, which="transforms_train.json"):
     fwd0 = fwd0 / np.linalg.norm(fwd0)
     look_dist = max(radius * 2.0, 5.0)
     target0 = eye0 + fwd0 * look_dist
+
+    # Full dataset camera list for viewpoint jumping (train + test).
+    def _cam_list(json_name):
+        path = os.path.join(source_path, json_name)
+        if not os.path.exists(path):
+            return []
+        with open(path) as f:
+            d = json.load(f)
+        out = []
+        for i, fr in enumerate(d["frames"]):
+            m = np.array(fr["transform_matrix"], dtype=np.float64)
+            e = m[:3, 3]
+            fw = -m[:3, 2]
+            fw = fw / np.linalg.norm(fw)
+            name = os.path.splitext(os.path.basename(fr["file_path"]))[0]
+            out.append({"i": i, "n": name,
+                        "e": [round(float(v), 4) for v in e],
+                        "f": [round(float(v), 4) for v in fw]})
+        return out
+
     return {
         "center": center.tolist(), "radius": radius, "fovx_deg": fovx_deg,
         "eye": eye0.tolist(), "target": target0.tolist(),
+        "cameras": {"train": _cam_list("transforms_train.json"),
+                    "test": _cam_list("transforms_test.json")},
     }
 
 
