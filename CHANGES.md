@@ -5,6 +5,18 @@
 
 ---
 
+## 2026-09-20 · gitignore：清理一次性脚本/产物，不再上 remote
+
+| 类型 | 文件 | 说明 | Commit |
+|---|---|---|---|
+| 修改 | `.gitignore` | 新增忽略：`plot_render_pipeline.py`、`depth_viewer.py`（一次性工具脚本）、`selftest_frames/`、`.wheels/`、`gaussian_model_review.diff`（本地临时产物） | 本次 |
+| 取消跟踪 | `plot_render_pipeline.py`、`depth_viewer.py` | `git rm --cached`，文件保留在本地，从远端移除 | 本次 |
+
+> `render_pipeline.png` 本就被既有 `*.png` 规则忽略，无需处理。
+> `export_decoded_ply.py` 保留跟踪：`viewer_server.py` 运行时依赖其中的 `load_cfg`。
+
+---
+
 ## 2026-09-16 · viewer：GT 并排对比模式（tar 流式取图 + PSNR）
 
 | 类型 | 文件 | 说明 | Commit |
