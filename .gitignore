@@ -62,3 +62,10 @@ run_*.sh
 # viewer artifacts
 viewer/node_modules/
 viewer/public/*.ply
+
+# local scratch / one-off tools (kept locally, not on remote)
+plot_render_pipeline.py
+depth_viewer.py
+selftest_frames/
+.wheels/
+gaussian_model_review.diff
